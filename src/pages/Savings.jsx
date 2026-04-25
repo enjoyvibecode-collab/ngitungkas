@@ -169,8 +169,33 @@ export default function Savings() {
       await batch.commit();
       setIsModalOpen(false);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `organizations/${profile.orgId}/savings batch`);
-      alert("Gagal memproses transaksi: " + err.message);
+      console.error("Savings transaction failed:", err);
+      
+      let enrichedError;
+      try {
+        // This will log the error and throw a JSON string
+        handleFirestoreError(err, OperationType.WRITE, `organizations/${profile.orgId}/savings batch`);
+      } catch (e) {
+        enrichedError = e;
+      }
+
+      let errorMessage = "Terjadi kesalahan saat menyimpan data.";
+      const errorToAnalyze = enrichedError || err;
+      
+      try {
+        const errorData = JSON.parse(errorToAnalyze.message);
+        if (errorData.error.includes('permission') || errorData.error.includes('denied')) {
+          errorMessage = "Akses Ditolak: Bapak/Ibu tidak memiliki wewenang untuk mencatat tabungan ini.";
+        } else {
+          errorMessage = errorData.error;
+        }
+      } catch (parseErr) {
+        if (errorToAnalyze.message.includes('permission') || errorToAnalyze.message.includes('denied')) {
+          errorMessage = "Akses Ditolak: Bapak/Ibu tidak memiliki izin untuk operasi ini.";
+        }
+      }
+
+      alert("Gagal memproses transaksi: " + errorMessage);
     } finally {
       setIsLoading(false);
     }

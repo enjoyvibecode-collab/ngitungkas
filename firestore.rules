@@ -123,11 +123,12 @@ service cloud.firestore {
       // Savings
       match /savings/{userId} {
         function isValidSaving(data) {
-          return data.userId is string && data.userId.size() <= 128 &&
-                 data.balance is number;
+          return data.userId is string && 
+                 data.balance is number &&
+                 (data.name == null || data.name is string);
         }
 
-        allow get: if isVerified() && (request.auth.uid == userId || isOrgTeacher(orgId));
+        allow get: if isOrgMember(orgId) && (request.auth.uid == userId || isOrgTeacher(orgId));
         allow list: if isOrgTeacher(orgId);
         
         allow write: if isOrgTeacher(orgId) && isValidSaving(incoming());
@@ -138,12 +139,12 @@ service cloud.firestore {
         function isValidActivityLog(data) {
           return data.actorId == request.auth.uid &&
                  data.timestamp == request.time &&
-                 data.action in ['promote', 'demote', 'remove', 'role_change'] &&
+                 data.action in ['promote', 'demote', 'remove', 'role_change', 'savings', 'transaction', 'contribution', 'reminder_sent'] &&
                  data.orgId == orgId;
         }
 
         allow read: if isOrgMember(orgId);
-        allow create: if isOrgAdmin(orgId) && isValidActivityLog(incoming());
+        allow create: if isOrgTeacher(orgId) && isValidActivityLog(incoming());
       }
 
       // Savings Logs
@@ -155,7 +156,7 @@ service cloud.firestore {
                  data.createdBy == request.auth.uid;
         }
 
-        allow read: if isVerified() && (request.auth.uid == resource.data.userId || isOrgTeacher(orgId));
+        allow read: if isOrgMember(orgId) && (request.auth.uid == resource.data.userId || isOrgTeacher(orgId));
         allow create: if isOrgTeacher(orgId) && isValidLog(incoming());
       }
     }
