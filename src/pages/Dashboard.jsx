@@ -100,6 +100,8 @@ export default function Dashboard() {
     };
   }, [profile]);
 
+  const [onboardingMode, setOnboardingMode] = useState('select'); // 'select', 'create', 'join'
+
   const handleCreateOrg = async (e) => {
     e.preventDefault();
     const orgName = e.target.orgName.value.trim();
@@ -130,30 +132,103 @@ export default function Dashboard() {
     }
   };
 
+  const handleJoinOrg = async (e) => {
+    e.preventDefault();
+    const orgId = e.target.orgId.value.trim().toLowerCase();
+    if (!orgId) return;
+
+    try {
+      // Check if org exists
+      const { getDoc } = await import('firebase/firestore');
+      const orgSnap = await getDoc(doc(db, 'organizations', orgId));
+      
+      if (!orgSnap.exists()) {
+        alert("Organisasi tidak ditemukan. Pastikan ID (slug) benar.");
+        return;
+      }
+
+      const userRef = doc(db, 'users', profile.uid);
+      await updateDoc(userRef, {
+        orgId: orgId,
+        role: 'member' // Default role when joining
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      alert("Gagal bergabung: " + err.message);
+    }
+  };
+
   if (!profile?.orgId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
         <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center mb-6">
           <Users className="w-10 h-10" />
         </div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Pendaftaran Admin Baru</h2>
-        <p className="text-slate-500 max-w-sm mb-8">Anda terdeteksi sebagai pengguna baru. Silahkan buat organisasi Bapak/Ibu untuk mulai mengelola KAS secara digital.</p>
         
-        <form onSubmit={handleCreateOrg} className="w-full max-w-md space-y-4">
-          <input 
-            name="orgName" 
-            type="text" 
-            required 
-            placeholder="Nama Organisasi (misal: Karang Taruna RW 05)"
-            className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
-          />
-          <Button type="submit" variant="brand" className="w-full py-4 rounded-2xl">
-            Buat & Masuk Dashboard
-          </Button>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">
-            Akses Admin akan diberikan secara otomatis kepada Bapak/Ibu.
-          </p>
-        </form>
+        {onboardingMode === 'select' && (
+          <div className="max-w-md w-full space-y-6">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Selamat Datang!</h2>
+            <p className="text-slate-500 mb-8 font-medium">Bapak/Ibu belum terdaftar di organisasi manapun. Silahkan pilih langkah selanjutnya:</p>
+            <div className="grid gap-4">
+              <button 
+                onClick={() => setOnboardingMode('create')}
+                className="flex flex-col items-center p-6 bg-indigo-600 text-white rounded-3xl hover:bg-indigo-700 transition-all text-center group"
+              >
+                <TrendingUp className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" />
+                <span className="font-black text-lg">Buat Organisasi Baru</span>
+                <span className="text-xs text-indigo-200 font-bold uppercase tracking-widest mt-1">Hanya untuk Admin/Ketua</span>
+              </button>
+              <button 
+                onClick={() => setOnboardingMode('join')}
+                className="flex flex-col items-center p-6 bg-slate-50 text-slate-900 border border-slate-200 rounded-3xl hover:bg-slate-100 transition-all text-center group"
+              >
+                <Users className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform text-indigo-600" />
+                <span className="font-black text-lg">Gabung Organisasi</span>
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Untuk Bendahara/Anggota</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {onboardingMode === 'create' && (
+          <div className="max-w-md w-full space-y-6">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Pendaftaran Admin Baru</h2>
+            <p className="text-slate-500 mb-8">Buat organisasi Bapak/Ibu untuk mulai mengelola KAS secara digital.</p>
+            <form onSubmit={handleCreateOrg} className="space-y-4">
+              <input 
+                name="orgName" 
+                type="text" 
+                required 
+                placeholder="Nama Organisasi (misal: Karang Taruna RW 05)"
+                className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
+              />
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setOnboardingMode('select')} className="flex-1 py-4 rounded-2xl">Kembali</Button>
+                <Button type="submit" variant="brand" className="flex-[2] py-4 rounded-2xl">Buat & Masuk</Button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {onboardingMode === 'join' && (
+          <div className="max-w-md w-full space-y-6">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Gabung Organisasi</h2>
+            <p className="text-slate-500 mb-8">Masukkan ID Organisasi (Slug) yang diberikan oleh Admin Anda.</p>
+            <form onSubmit={handleJoinOrg} className="space-y-4">
+              <input 
+                name="orgId" 
+                type="text" 
+                required 
+                placeholder="ID Organisasi (misal: karang-taruna-rt01)"
+                className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
+              />
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setOnboardingMode('select')} className="flex-1 py-4 rounded-2xl">Kembali</Button>
+                <Button type="submit" variant="brand" className="flex-[2] py-4 rounded-2xl">Gabung Sekarang</Button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     );
   }

@@ -12,11 +12,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubProfile = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
         const docRef = doc(db, 'users', user.uid);
-        const unsubProfile = onSnapshot(docRef, (docSnap) => {
+        unsubProfile = onSnapshot(docRef, (docSnap) => {
           if (docSnap.exists()) {
             setProfile(docSnap.data());
           } else {
@@ -37,15 +38,17 @@ export function AuthProvider({ children }) {
           handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
           setLoading(false);
         });
-
-        return () => unsubProfile();
       } else {
+        if (unsubProfile) unsubProfile();
         setProfile(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
   const signIn = async () => {

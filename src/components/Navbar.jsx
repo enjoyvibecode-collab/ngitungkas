@@ -72,7 +72,16 @@ export function Navbar() {
             <div className="flex items-center space-x-4 border-l border-slate-200 pl-6">
               <div className="text-right">
                 <p className="text-xs font-black text-slate-900 tracking-tight">{profile?.displayName}</p>
-                <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest leading-none mt-1">{profile?.role}</p>
+                <div className="flex items-center justify-end gap-1.5 mt-1">
+                  <p className="text-[9px] text-indigo-600 font-black uppercase tracking-widest leading-none bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                    {profile?.role}
+                  </p>
+                  {profile?.orgId && (
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none border border-slate-200 px-1.5 py-0.5 rounded-full">
+                      ID: {profile.orgId}
+                    </p>
+                  )}
+                </div>
               </div>
               <img 
                 src={profile?.photoURL || `https://ui-avatars.com/api/?name=${profile?.displayName}`} 

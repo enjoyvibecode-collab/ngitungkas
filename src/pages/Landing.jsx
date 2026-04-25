@@ -1,11 +1,12 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Button, Card } from '../components/Common';
 import { useAuth } from '../hooks/useAuth';
 import { Receipt, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Landing() {
-  const { signIn, loading } = useAuth();
+  const { user, signIn, loading } = useAuth();
 
   const features = [
     { 
@@ -26,8 +27,8 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 selection:bg-slate-900 selection:text-white">
-      <div className="max-w-5xl w-full text-center space-y-12">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 selection:bg-slate-900 selection:text-white text-center">
+      <div className="max-w-5xl w-full space-y-12">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -54,9 +55,17 @@ export default function Landing() {
           transition={{ delay: 0.3 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
-          <Button size="lg" variant="brand" onClick={signIn} isLoading={loading} className="w-full sm:w-auto shadow-2xl shadow-indigo-200">
-            Mulai Sekarang
-          </Button>
+          {user ? (
+            <Link to="/dashboard" className="w-full sm:w-auto">
+              <Button size="lg" variant="brand" className="w-full shadow-2xl shadow-indigo-200">
+                Buka Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Button size="lg" variant="brand" onClick={signIn} isLoading={loading} className="w-full sm:w-auto shadow-2xl shadow-indigo-200">
+              Mulai Sekarang
+            </Button>
+          )}
           <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white">
             Dokumentasi
           </Button>
