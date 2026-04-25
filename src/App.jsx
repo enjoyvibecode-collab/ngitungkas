@@ -45,6 +45,7 @@ function AppContent() {
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/transactions" element={<Transactions />} />
+                <Route path="/contributions" element={<Contributions />} />
                 <Route path="/savings" element={<Savings />} />
                 <Route path="/" element={<Navigate to="/dashboard" />} />
               </Routes>

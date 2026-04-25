@@ -12,7 +12,8 @@ import {
   writeBatch, 
   doc, 
   serverTimestamp, 
-  getDoc 
+  getDoc,
+  limit 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';

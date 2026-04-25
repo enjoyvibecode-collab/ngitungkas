@@ -24,6 +24,7 @@ export function Navbar() {
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Arsip Kas', path: '/transactions', icon: Receipt },
+    { name: 'Iuran Rutin', path: '/contributions', icon: Users },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
   ];
 
