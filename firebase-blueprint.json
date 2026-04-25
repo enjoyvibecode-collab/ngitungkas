@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile and organization membership information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "treasurer", "member"] },
+        "orgId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "orgId", "role"]
+    },
+    "Transaction": {
+      "title": "Cash Transaction",
+      "description": "Record of income or expense for an organization.",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "isDeleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["amount", "type", "description", "createdBy"]
+    },
+    "SavingAccount": {
+      "title": "Saving Account",
+      "description": "Current balance of an individual member's savings within an organization.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "balance": { "type": "number" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "balance"]
+    },
+    "SavingLog": {
+      "title": "Saving Log",
+      "description": "Audit trail for every deposit or withdrawal in a saving account.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdraw"] },
+        "amount": { "type": "number" },
+        "prevBalance": { "type": "number" },
+        "newBalance": { "type": "number" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["userId", "amount", "newBalance", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records."
+    },
+    "/organizations/{orgId}/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Organization ledger entries."
+    },
+    "/organizations/{orgId}/savings/{userId}": {
+      "schema": "SavingAccount",
+      "description": "Current balances for member savings."
+    },
+    "/organizations/{orgId}/savings_logs/{logId}": {
+      "schema": "SavingLog",
+      "description": "Audit trail for all savings operations."
+    }
+  }
+}

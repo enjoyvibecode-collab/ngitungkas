@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    
+    // Relational Helpers
+    function getProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isOrgMember(orgId) {
+      return isVerified() && getProfile().orgId == orgId;
+    }
+    function isOrgAdmin(orgId) {
+      return isOrgMember(orgId) && getProfile().role == 'admin';
+    }
+    function isOrgTreasurer(orgId) {
+      return isOrgMember(orgId) && (getProfile().role == 'admin' || getProfile().role == 'treasurer');
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.uid == request.auth.uid &&
+               data.displayName is string && data.displayName.size() <= 100 &&
+               data.email == request.auth.token.email &&
+               data.role in ['admin', 'treasurer', 'member'] &&
+               data.orgId is string && data.orgId.size() <= 50;
+      }
+
+      allow get: if isSignedIn() && (request.auth.uid == userId || isOrgAdmin(existing().orgId));
+      allow list: if isVerified() && resource.data.orgId == getProfile().orgId;
+      
+      allow create: if isVerified() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isVerified() && request.auth.uid == userId && 
+                       isValidUser(incoming()) &&
+                       incoming().role == existing().role && // Users cannot change their own roles
+                       incoming().orgId == existing().orgId;
+    }
+
+    // 2. Organization subcollections
+    match /organizations/{orgId} {
+      allow get: if isOrgMember(orgId);
+
+      // Transactions
+      match /transactions/{txId} {
+        function isValidTransaction(data) {
+          return data.amount is number && data.amount > 0 &&
+                 data.type in ['income', 'expense'] &&
+                 data.description is string && data.description.size() <= 1000 &&
+                 data.createdBy == request.auth.uid &&
+                 data.isDeleted is bool;
+        }
+
+        allow read: if isOrgMember(orgId);
+        allow create: if isOrgTreasurer(orgId) && isValidId(txId) && isValidTransaction(incoming());
+        allow update: if isOrgTreasurer(orgId) && 
+                         isValidTransaction(incoming()) &&
+                         // Soft delete or field update tracking
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'category', 'description', 'amount']));
+      }
+
+      // Savings
+      match /savings/{userId} {
+        function isValidSaving(data) {
+          return data.userId is string && data.userId.size() <= 128 &&
+                 data.balance is number;
+        }
+
+        allow get: if isVerified() && (request.auth.uid == userId || isOrgTreasurer(orgId));
+        allow list: if isOrgTreasurer(orgId);
+        
+        allow write: if isOrgTreasurer(orgId) && isValidSaving(incoming());
+      }
+
+      // Savings Logs
+      match /savings_logs/{logId} {
+        function isValidLog(data) {
+          return data.userId is string &&
+                 data.type in ['deposit', 'withdraw'] &&
+                 data.amount is number && 
+                 data.createdBy == request.auth.uid;
+        }
+
+        allow read: if isVerified() && (request.auth.uid == resource.data.userId || isOrgTreasurer(orgId));
+        allow create: if isOrgTreasurer(orgId) && isValidLog(incoming());
+      }
+    }
+  }
+}
