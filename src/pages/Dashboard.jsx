@@ -34,6 +34,7 @@ export default function Dashboard() {
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
+  const [members, setMembers] = useState([]);
 
   useEffect(() => {
     if (!profile?.orgId) return;
@@ -86,6 +87,8 @@ export default function Dashboard() {
       where('orgId', '==', profile.orgId)
     );
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
+      const membersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setMembers(membersData);
       setStats(prev => ({ ...prev, members: snapshot.size }));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users`);
@@ -102,10 +105,19 @@ export default function Dashboard() {
     const orgName = e.target.orgName.value.trim();
     if (!orgName) return;
 
+    const slug = orgName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+
     try {
+      // 1. Create Organization doc
+      const { setDoc, serverTimestamp } = await import('firebase/firestore');
+      await setDoc(doc(db, 'organizations', slug), {
+        name: orgName,
+        createdAt: serverTimestamp(),
+        createdBy: profile.uid
+      });
+
+      // 2. Update User profile
       const userRef = doc(db, 'users', profile.uid);
-      // Slugify simple org name + random string
-      const slug = orgName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
       
       await updateDoc(userRef, {
         orgId: slug,
@@ -113,7 +125,7 @@ export default function Dashboard() {
       });
       // Profile will auto-update via AuthContext listener
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      handleFirestoreError(err, OperationType.WRITE, `organizations/${slug}`);
       alert("Gagal membuat organisasi: " + err.message);
     }
   };
@@ -222,18 +234,25 @@ export default function Dashboard() {
         {/* Members Quick List */}
         <Card title="Anggota Organisasi" className="col-span-12 lg:col-span-5">
            <div className="space-y-3">
-             {[1,2,3].map(i => (
-               <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+             {members.length > 0 ? members.map(member => (
+               <div key={member.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">U{i}</div>
+                    <img src={member.photoURL} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
                     <div>
-                      <div className="text-sm font-bold text-slate-800">User Participant {i}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Active Member</div>
+                      <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{member.role}</div>
                     </div>
                   </div>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-100 font-bold uppercase">Online</span>
+                  <span className={cn(
+                    "text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase",
+                    member.orgId ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-200"
+                  )}>
+                    Joined
+                  </span>
                </div>
-             ))}
+             )) : (
+               <p className="text-center text-xs text-slate-400 py-4 font-bold uppercase tracking-widest">No members found</p>
+             )}
            </div>
         </Card>
 
