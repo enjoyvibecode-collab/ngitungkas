@@ -6,7 +6,17 @@ import { Receipt, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Landing() {
-  const { user, signIn, loading } = useAuth();
+  const { user, signIn, loading: authLoading } = useAuth();
+  const [isSigningIn, setIsSigningIn] = React.useState(false);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      await signIn();
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   const features = [
     { 
@@ -62,7 +72,7 @@ export default function Landing() {
               </Button>
             </Link>
           ) : (
-            <Button size="lg" variant="brand" onClick={signIn} isLoading={loading} className="w-full sm:w-auto shadow-2xl shadow-indigo-200">
+            <Button size="lg" variant="brand" onClick={handleSignIn} isLoading={isSigningIn} className="w-full sm:w-auto shadow-2xl shadow-indigo-200">
               Mulai Sekarang
             </Button>
           )}
