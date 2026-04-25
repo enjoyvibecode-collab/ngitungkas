@@ -21,6 +21,7 @@ export function AuthProvider({ children }) {
           if (docSnap.exists()) {
             setProfile(docSnap.data());
           } else {
+            console.log("No profile found, creating one for:", user.uid);
             const newProfile = {
               uid: user.uid,
               displayName: user.displayName || 'User',
@@ -30,12 +31,18 @@ export function AuthProvider({ children }) {
               orgId: null,
               createdAt: serverTimestamp(),
             };
-            setDoc(docRef, newProfile).catch(console.error);
+            setDoc(docRef, newProfile).catch(err => {
+               console.error("Critical error creating profile:", err);
+            });
             setProfile(newProfile);
           }
           setLoading(false);
         }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          console.error("Profile snapshot error:", error);
+          // Don't crash the whole app, but log it
+          if (error.code !== 'permission-denied') {
+             handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          }
           setLoading(false);
         });
       } else {

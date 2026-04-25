@@ -25,7 +25,7 @@ service cloud.firestore {
     }
     function isOrgMember(orgId) {
       let p = getProfile();
-      return isSignedIn() && p != null && p.orgId == orgId;
+      return isSignedIn() && p != null && p.orgId != null && p.orgId == orgId;
     }
     function isOrgAdmin(orgId) {
       let p = getProfile();
@@ -46,7 +46,7 @@ service cloud.firestore {
                (data.orgId == null || (data.orgId is string && data.orgId.size() <= 50));
       }
 
-      // Allow users to read their own profile without complex checks
+      // Allow users to read their own profile
       allow get: if isSignedIn() && (request.auth.uid == userId);
       
       // Allow members of the same org to see each other
@@ -60,13 +60,15 @@ service cloud.firestore {
                          // Normal updates (role & orgId are immutable)
                          (incoming().role == existing().role && incoming().orgId == existing().orgId) ||
                          // First-time setup: Allow setting orgId and role to admin if currently null
-                         (existing().orgId == null && incoming().role == 'admin' && incoming().orgId != null)
+                         (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
                        );
     }
 
     // 2. Organization subcollections
     match /organizations/{orgId} {
-      allow get: if isOrgMember(orgId);
+      // Allow any signed-in user to check if an organization exists (needed for joining)
+      // but keep transactions private.
+      allow get: if isSignedIn(); 
       allow create: if isSignedIn();
 
       // Transactions
