@@ -10,7 +10,8 @@ import {
   ArrowDownLeft,
   Filter,
   Calendar,
-  Clock
+  Clock,
+  MessageCircle
 } from 'lucide-react';
 import { 
   collection, 
@@ -23,7 +24,7 @@ import {
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
-import { cn } from '../lib/utils';
+import { cn, formatDate } from '../lib/utils';
 import { motion } from 'motion/react';
 
 export default function ActivityLogs() {
@@ -216,11 +217,11 @@ export default function ActivityLogs() {
                     <div className="flex items-center gap-4 pt-2">
                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase">
                          <Calendar className="w-3 h-3" />
-                         {log.timestamp?.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                         {formatDate(log.timestamp)}
                        </div>
                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase">
                          <Clock className="w-3 h-3" />
-                         {log.timestamp?.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                         {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                        </div>
                     </div>
                   </div>

@@ -298,7 +298,7 @@ export default function Members() {
                     </td>
                     {isAdmin && (
                       <td className="px-8 py-5 text-right">
-                        {member.uid === profile.uid ? (
+                        {member.uid === profile?.uid ? (
                           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200">
                              <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Akun Anda</span>
                           </div>
@@ -361,12 +361,12 @@ export default function Members() {
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{member.role}</p>
                       </div>
                     </div>
-                    {member.uid === profile.uid && (
+                    {member.uid === profile?.uid && (
                       <span className="text-[8px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">You</span>
                     )}
                   </div>
                   
-                  {isAdmin && member.uid !== profile.uid && (
+                  {isAdmin && member.uid !== profile?.uid && (
                     <div className="flex gap-2 pt-2">
                       <select 
                         disabled={updatingId === member.id}

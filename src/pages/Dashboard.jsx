@@ -46,13 +46,55 @@ export default function Dashboard() {
   useEffect(() => {
     if (!profile?.orgId) return;
 
-    // ... existing transaction listener ...
+    const qAll = query(
+      collection(db, 'organizations', profile.orgId, 'transactions'),
+      where('isDeleted', '==', false)
+    );
+
+    const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
+      let income = 0;
+      let expense = 0;
+      const txs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        if (data.type === 'income') income += data.amount;
+        else expense += data.amount;
+        return { id: doc.id, ...data };
+      });
+      
+      setStats(prev => ({
+        ...prev,
+        income,
+        expense,
+        balance: income - expense
+      }));
+
+      // Calculate monthly aggregation for chart
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const monthly = txs.reduce((acc, tx) => {
+        if (!tx.date) return acc;
+        const d = tx.date.toDate();
+        const mKey = months[d.getMonth()];
+        if (!acc[mKey]) acc[mKey] = { month: mKey, income: 0, expense: 0 };
+        acc[mKey][tx.type] += tx.amount;
+        return acc;
+      }, {});
+
+      const sortedChart = Object.values(monthly).sort((a,b) => months.indexOf(a.month) - months.indexOf(b.month));
+      setChartData(sortedChart.length > 0 ? sortedChart : [{ month: 'N/A', income: 0, expense: 0 }]);
+
+      const sorted = [...txs].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+      setRecentTransactions(sorted.slice(0, 5));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/transactions`);
+    });
 
     // Listen to members
     const qMembers = query(
       collection(db, 'users'),
       where('orgId', '==', profile.orgId)
     );
+
+    let unsubscribePayments = null;
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
       const membersData = snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() }));
       setMembers(membersData);
@@ -70,7 +112,8 @@ export default function Dashboard() {
         where('date', '<=', Timestamp.fromDate(endOfMonth))
       );
 
-      onSnapshot(qPayments, (snap) => {
+      if (unsubscribePayments) unsubscribePayments();
+      unsubscribePayments = onSnapshot(qPayments, (snap) => {
         const paidUids = snap.docs.map(d => d.data().memberId || d.data().userId);
         const unpaid = membersData.filter(m => !paidUids.includes(m.uid || m.id));
         setUnpaidMembers(unpaid);
@@ -83,6 +126,7 @@ export default function Dashboard() {
     return () => {
       unsubscribeAll();
       unsubscribeMembers();
+      if (unsubscribePayments) unsubscribePayments();
     };
   }, [profile]);
 
