@@ -26,6 +26,13 @@ export default function Savings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [modalType, setModalType] = useState('deposit'); // 'deposit' or 'withdraw'
+  
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     if (!profile?.orgId) return;
@@ -95,6 +102,7 @@ export default function Savings() {
         : currentBalance - amount;
 
       const userName = members.find(m => m.uid === userId)?.displayName || 'Unknown';
+      const actionTitle = modalType === 'deposit' ? 'Setoran Tabungan' : 'Penarikan Tabungan';
 
       // 1. Update/Set Balance State
       batch.set(savingRef, {
@@ -104,7 +112,7 @@ export default function Savings() {
         lastUpdated: serverTimestamp()
       }, { merge: true });
 
-      // 2. Add Audit Log (Ledger)
+      // 2. Add Savings Audit Log (Specific for Savings page)
       batch.set(logRef, {
         userId,
         name: userName,
@@ -115,6 +123,20 @@ export default function Savings() {
         description,
         createdAt: serverTimestamp(),
         createdBy: profile.uid
+      });
+
+      // 3. Add Global Activity Log
+      const globalLogRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
+      batch.set(globalLogRef, {
+        actorId: profile.uid,
+        actorName: profile.displayName,
+        targetUserId: userId,
+        targetUserName: userName,
+        action: 'savings',
+        txTitle: `${actionTitle}: ${description || 'Tanpa keterangan'}`,
+        amount,
+        orgId: profile.orgId,
+        timestamp: serverTimestamp()
       });
 
       await batch.commit();
@@ -289,6 +311,16 @@ export default function Savings() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+        variant={modalType === 'withdraw' ? 'danger' : 'indigo'}
+        confirmText={modalType === 'withdraw' ? 'Tarik Dana' : 'Simpan Dana'}
+      />
     </div>
   );
 }

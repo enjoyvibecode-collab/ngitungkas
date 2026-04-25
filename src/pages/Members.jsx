@@ -1,0 +1,467 @@
+import React, { useState, useEffect } from 'react';
+import { Card, Button } from '../components/Common';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { 
+  Users, 
+  Shield, 
+  ShieldCheck, 
+  UserMinus, 
+  UserCheck,
+  Search,
+  MoreVertical,
+  AlertCircle
+} from 'lucide-react';
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  updateDoc,
+  addDoc,
+  serverTimestamp,
+  writeBatch
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from '../hooks/useAuth';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
+
+export default function Members() {
+  const { profile } = useAuth();
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal states
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+    variant: 'danger',
+    confirmText: 'Konfirmasi'
+  });
+
+  useEffect(() => {
+    if (!profile?.orgId) return;
+
+    const q = query(
+      collection(db, 'users'),
+      where('orgId', '==', profile.orgId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const membersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setMembers(membersData);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [profile?.orgId]);
+
+  const updateUserRole = async (member, newRole) => {
+    if (member.uid === profile.uid) {
+      alert("Anda tidak bisa mengubah peran Anda sendiri.");
+      return;
+    }
+
+    const isPromotingToAdmin = newRole === 'admin';
+    
+    setConfirmModal({
+      isOpen: true,
+      title: isPromotingToAdmin ? 'Promosi Administrator' : 'Ubah Peran Anggota',
+      description: isPromotingToAdmin 
+        ? `Apakah Bapak/Ibu yakin ingin memberikan hak akses ADMINISTRATOR kepada ${member.displayName}? Admin baru akan memiliki kontrol penuh terhadap seluruh data keuangan organisasi.`
+        : `Ubah peran ${member.displayName} menjadi ${newRole.toUpperCase()}?`,
+      variant: isPromotingToAdmin ? 'danger' : 'indigo',
+      confirmText: 'Ubah Peran',
+      onConfirm: async () => {
+        setUpdatingId(member.id);
+        try {
+          const batch = writeBatch(db);
+          const userRef = doc(db, 'users', member.id);
+          
+          batch.update(userRef, { role: newRole });
+          
+          const logRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
+          batch.set(logRef, {
+            actorId: profile.uid,
+            actorName: profile.displayName,
+            targetUserId: member.uid,
+            targetUserName: member.displayName,
+            action: 'role_change',
+            oldRole: member.role,
+            newRole: newRole,
+            orgId: profile.orgId,
+            timestamp: serverTimestamp()
+          });
+
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${member.id}`);
+          alert("Gagal mengubah peran: Akses ditolak.");
+        } finally {
+          setUpdatingId(null);
+        }
+      }
+    });
+  };
+
+  const removeMember = async (member) => {
+    if (member.uid === profile.uid) {
+      alert("Anda tidak bisa mengeluarkan diri Anda sendiri.");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Keluarkan Anggota',
+      description: `PERINGATAN: Apakah Bapak/Ibu yakin ingin mengeluarkan ${member.displayName} dari organisasi? Akses keuangan orang ini akan dicabut seketika dan mereka tidak lagi bisa melihat laporan.`,
+      variant: 'danger',
+      confirmText: 'Keluarkan Sekarang',
+      onConfirm: async () => {
+        setUpdatingId(member.id);
+        try {
+          const batch = writeBatch(db);
+          const userRef = doc(db, 'users', member.id);
+          
+          batch.update(userRef, { 
+            orgId: null,
+            role: 'member'
+          });
+
+          const logRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
+          batch.set(logRef, {
+            actorId: profile.uid,
+            actorName: profile.displayName,
+            targetUserId: member.uid,
+            targetUserName: member.displayName,
+            action: 'remove',
+            oldRole: member.role,
+            orgId: profile.orgId,
+            timestamp: serverTimestamp()
+          });
+
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${member.id}`);
+          alert("Gagal mengeluarkan anggota.");
+        } finally {
+          setUpdatingId(null);
+        }
+      }
+    });
+  };
+
+  const isAdmin = profile?.role === 'admin';
+  const filteredMembers = members.filter(m => 
+    m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    m.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (!profile?.orgId) {
+    return (
+      <div className="p-12 text-center bg-white rounded-[3rem] border border-slate-200">
+        <h2 className="text-2xl font-black text-slate-900 leading-tight">Akses Terbatas</h2>
+        <p className="mt-2 text-slate-500 font-medium max-w-xs mx-auto">Silahkan buat atau gabung organisasi untuk mengelola anggota.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-8">
+        <div>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Anggota Komunitas</h1>
+          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-2 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            Keamanan Tingkat Tinggi Aktif
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Cari anggota..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none w-full sm:min-w-[240px] shadow-sm"
+            />
+          </div>
+          <div className="px-5 py-3 bg-slate-900 text-white rounded-2xl flex items-center gap-3 shadow-lg shadow-slate-200">
+            <Users className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs font-black uppercase tracking-widest">{members.length} Anggota</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Table for Desktop, Cards for Mobile */}
+      <div className="grid grid-cols-1 gap-4">
+        <Card className="p-0 overflow-hidden border-slate-200 shadow-sm transition-all hover:shadow-md">
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50">
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Personal</th>
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Hak Akses</th>
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                  {isAdmin && <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Manajemen</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loading ? (
+                  [...Array(3)].map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td colSpan={4} className="px-8 py-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-slate-100 rounded-2xl" />
+                          <div className="space-y-2">
+                             <div className="h-3 w-32 bg-slate-100 rounded" />
+                             <div className="h-2 w-20 bg-slate-50 rounded" />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : filteredMembers.length === 0 ? (
+                  <tr>
+                    <td colSpan={isAdmin ? 4 : 3} className="px-8 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2 opacity-50">
+                        <Users className="w-8 h-8 text-slate-300" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tidak ada anggota yang cocok</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredMembers.map((member) => (
+                  <tr key={member.id} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          <img 
+                            src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} 
+                            alt="" 
+                            className="w-10 h-10 rounded-2xl border border-slate-200 object-cover shadow-sm" 
+                          />
+                          {member.uid === profile.uid && (
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-indigo-600 rounded-full border-2 border-white flex items-center justify-center">
+                              <ShieldCheck className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{member.displayName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{member.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                          "w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110",
+                          member.role === 'admin' ? "bg-indigo-50" : 
+                          member.role === 'treasurer' ? "bg-emerald-50" : "bg-slate-50"
+                        )}>
+                          {member.role === 'admin' ? (
+                            <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                          ) : member.role === 'treasurer' ? (
+                            <Shield className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <UserCheck className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest",
+                          member.role === 'admin' ? "text-indigo-600" : 
+                          member.role === 'treasurer' ? "text-emerald-600" : "text-slate-500"
+                        )}>
+                          {member.role}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Online</span>
+                      </div>
+                    </td>
+                    {isAdmin && (
+                      <td className="px-8 py-5 text-right">
+                        {member.uid === profile.uid ? (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200">
+                             <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Akun Anda</span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                            <select 
+                              disabled={updatingId === member.id}
+                              value={member.role}
+                              onChange={(e) => updateUserRole(member, e.target.value)}
+                              className="text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50 appearance-none shadow-sm cursor-pointer"
+                            >
+                              <option value="member">Member</option>
+                              <option value="treasurer">Treasurer</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              disabled={updatingId === member.id}
+                              onClick={() => removeMember(member)}
+                              className="rounded-xl bg-orange-50 text-orange-600 border border-orange-100 hover:bg-orange-100 w-10 h-10 p-0 flex items-center justify-center transition-colors"
+                            >
+                              <UserMinus className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Layout (Cards) */}
+          <div className="md:hidden grid grid-cols-1 divide-y divide-slate-100">
+             {loading ? (
+               [...Array(3)].map((_, i) => (
+                 <div key={i} className="p-6 animate-pulse space-y-4">
+                   <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-slate-100 rounded-2xl" />
+                      <div className="space-y-2">
+                        <div className="h-3 w-40 bg-slate-100 rounded" />
+                        <div className="h-2 w-24 bg-slate-50 rounded" />
+                      </div>
+                   </div>
+                 </div>
+               ))
+             ) : filteredMembers.map((member) => (
+               <div key={member.id} className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} 
+                        alt="" 
+                        className="w-12 h-12 rounded-2xl border border-slate-200 shadow-sm" 
+                      />
+                      <div>
+                        <p className="text-sm font-black text-slate-900">{member.displayName}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{member.role}</p>
+                      </div>
+                    </div>
+                    {member.uid === profile.uid && (
+                      <span className="text-[8px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">You</span>
+                    )}
+                  </div>
+                  
+                  {isAdmin && member.uid !== profile.uid && (
+                    <div className="flex gap-2 pt-2">
+                      <select 
+                        disabled={updatingId === member.id}
+                        value={member.role}
+                        onChange={(e) => updateUserRole(member, e.target.value)}
+                        className="flex-1 text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl px-4 py-3 outline-none shadow-sm"
+                      >
+                        <option value="member">Member</option>
+                        <option value="treasurer">Treasurer</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        disabled={updatingId === member.id}
+                        onClick={() => removeMember(member)}
+                        className="rounded-xl bg-orange-50 text-orange-600 border border-orange-100 px-4"
+                      >
+                        <UserMinus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+               </div>
+             ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Role Guide Bento Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card title="Glosarium Peran" className="lg:col-span-2 shadow-sm border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-2">
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-[1.25rem] bg-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
+                  <ShieldCheck className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h5 className="text-sm font-black text-slate-900 uppercase tracking-tight">Admin Utama</h5>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">Kontrol penuh akses user, pengelolaan organisasi, dan otorisasi finansial absolut.</p>
+                </div>
+              </div>
+              <div className="flex gap-4 pt-2">
+                <div className="w-12 h-12 rounded-[1.25rem] bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-100">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h5 className="text-sm font-black text-slate-900 uppercase tracking-tight">Bendahara</h5>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">Fokus pada arus kas, tabungan, dan integritas data transaksi harian.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 relative overflow-hidden group">
+               <div className="relative z-10">
+                 <AlertCircle className="w-6 h-6 text-slate-400 mb-3" />
+                 <h6 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Peringatan Keamanan</h6>
+                 <p className="text-xs text-slate-600 mt-2 leading-relaxed">Setiap perubahan peran direkam secara permanen dalam audit log untuk mencegah penyalahgunaan sistem.</p>
+               </div>
+               <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/50 rounded-full blur-2xl transition-transform group-hover:scale-150" />
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Aturan Sistem" variant="dark">
+           <div className="space-y-4 mt-2">
+             <div className="flex items-start gap-3">
+               <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-400 shrink-0" />
+               <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-loose">Admin tidak bisa mengubah profil sendiri</p>
+             </div>
+             <div className="flex items-start gap-3">
+               <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-400 shrink-0" />
+               <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-loose">Hanya Admin yang punya akses menu ini</p>
+             </div>
+             <div className="flex items-start gap-3">
+               <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-400 shrink-0" />
+               <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-loose">Audit Log tidak bisa dihapus user</p>
+             </div>
+             <div className="flex items-start gap-3">
+               <div className="w-2 h-2 mt-1.5 rounded-full bg-indigo-400 shrink-0" />
+               <p className="text-[10px] text-white/70 font-bold uppercase tracking-widest leading-loose">Remove member bersifat permanen</p>
+             </div>
+           </div>
+        </Card>
+      </div>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+        variant={confirmModal.variant}
+        confirmText={confirmModal.confirmText}
+      />
+    </div>
+  );
+}

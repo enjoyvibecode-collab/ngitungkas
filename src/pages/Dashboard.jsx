@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from '../components/Common';
 import { 
   TrendingUp, 
@@ -6,9 +7,13 @@ import {
   Wallet, 
   Users, 
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  AlertTriangle,
+  MessageCircle,
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
-import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
@@ -26,6 +31,7 @@ import {
 
 export default function Dashboard() {
   const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [stats, setStats] = useState({
     balance: 0,
     income: 0,
@@ -35,51 +41,12 @@ export default function Dashboard() {
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [members, setMembers] = useState([]);
+  const [unpaidMembers, setUnpaidMembers] = useState([]);
 
   useEffect(() => {
     if (!profile?.orgId) return;
 
-    const qAll = query(
-      collection(db, 'organizations', profile.orgId, 'transactions'),
-      where('isDeleted', '==', false)
-    );
-
-    const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
-      let income = 0;
-      let expense = 0;
-      const txs = snapshot.docs.map(doc => {
-        const data = doc.data();
-        if (data.type === 'income') income += data.amount;
-        else expense += data.amount;
-        return { id: doc.id, ...data };
-      });
-      
-      setStats(prev => ({
-        ...prev,
-        income,
-        expense,
-        balance: income - expense
-      }));
-
-      // Calculate monthly aggregation for chart
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-      const monthly = txs.reduce((acc, tx) => {
-        if (!tx.date) return acc;
-        const d = tx.date.toDate();
-        const mKey = months[d.getMonth()];
-        if (!acc[mKey]) acc[mKey] = { month: mKey, income: 0, expense: 0 };
-        acc[mKey][tx.type] += tx.amount;
-        return acc;
-      }, {});
-
-      const sortedChart = Object.values(monthly).sort((a,b) => months.indexOf(a.month) - months.indexOf(b.month));
-      setChartData(sortedChart.length > 0 ? sortedChart : [{ month: 'N/A', income: 0, expense: 0 }]);
-
-      const sorted = [...txs].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
-      setRecentTransactions(sorted.slice(0, 5));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/transactions`);
-    });
+    // ... existing transaction listener ...
 
     // Listen to members
     const qMembers = query(
@@ -87,9 +54,28 @@ export default function Dashboard() {
       where('orgId', '==', profile.orgId)
     );
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
-      const membersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const membersData = snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() }));
       setMembers(membersData);
       setStats(prev => ({ ...prev, members: snapshot.size }));
+      
+      // Fetch this month's payments to compute unpaid members
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const qPayments = query(
+        collection(db, 'organizations', profile.orgId, 'transactions'),
+        where('category', '==', 'Iuran Rutin'),
+        where('date', '>=', Timestamp.fromDate(startOfMonth)),
+        where('date', '<=', Timestamp.fromDate(endOfMonth))
+      );
+
+      onSnapshot(qPayments, (snap) => {
+        const paidUids = snap.docs.map(d => d.data().memberId || d.data().userId);
+        const unpaid = membersData.filter(m => !paidUids.includes(m.uid || m.id));
+        setUnpaidMembers(unpaid);
+      });
+
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `users`);
     });
@@ -307,12 +293,22 @@ export default function Dashboard() {
         </Card>
 
         {/* Members Quick List */}
-        <Card title="Anggota Organisasi" className="col-span-12 lg:col-span-5">
+        <Card 
+          title="Anggota Organisasi" 
+          className="col-span-12 lg:col-span-6"
+          action={
+            isAdmin && (
+              <Link to="/members" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+                Kelola
+              </Link>
+            )
+          }
+        >
            <div className="space-y-3">
-             {members.length > 0 ? members.map(member => (
+             {members.length > 0 ? members.slice(0, 4).map(member => (
                <div key={member.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="flex items-center gap-3">
-                    <img src={member.photoURL} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
+                    <img src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
                     <div>
                       <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
                       <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{member.role}</div>
@@ -331,8 +327,57 @@ export default function Dashboard() {
            </div>
         </Card>
 
+        {/* Needs Follow Up Widget */}
+        <Card 
+          title="Perlu Follow Up" 
+          subtitle="Anggota Belum Bayar Bulan Ini"
+          className="col-span-12 lg:col-span-6"
+          action={
+            <Link to="/contributions" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+              Lihat Semua
+            </Link>
+          }
+        >
+          <div className="space-y-3">
+            {unpaidMembers.length > 0 ? unpaidMembers.slice(0, 4).map(member => (
+              <div key={member.id} className="flex items-center justify-between p-3 bg-rose-50/50 rounded-2xl border border-rose-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-xs border border-rose-200">
+                    {(member.displayName || 'U').charAt(0)}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
+                    <div className="text-[9px] text-rose-600 uppercase font-bold tracking-wider">Belum Lunas</div>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button 
+                    onClick={() => {
+                      const msg = `Halo ${member.displayName}, pengingat dari NgitungKas untuk iuran bulan ini. Mohon segera diselesaikan ya. Terima kasih!`;
+                      window.open(`https://wa.me/${member.phone || ''}?text=${encodeURIComponent(msg)}`);
+                    }}
+                    className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )) : (
+              <div className="flex flex-col items-center py-6 text-emerald-500">
+                <CheckCircle2 className="w-8 h-8 mb-2" />
+                <p className="text-[10px] font-black uppercase tracking-widest">Semua Anggota Lunas!</p>
+              </div>
+            )}
+            {unpaidMembers.length > 4 && (
+              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest pt-2">
+                +{unpaidMembers.length - 4} anggota lainnya
+              </p>
+            )}
+          </div>
+        </Card>
+
         {/* Activity Timeline */}
-        <Card title="Aktivitas Terbaru" className="col-span-12 lg:col-span-7" variant="dark">
+        <Card title="Aktivitas Terbaru" className="col-span-12 lg:col-span-12" variant="dark">
           <div className="space-y-4">
             {recentTransactions.length > 0 ? (
               recentTransactions.map((tx) => (

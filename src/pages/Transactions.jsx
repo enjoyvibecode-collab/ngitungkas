@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button } from '../components/Common';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { 
   Search, 
   Plus, 
@@ -8,9 +9,21 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   MoreVertical,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, updateDoc, doc } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  addDoc, 
+  serverTimestamp, 
+  where, 
+  updateDoc, 
+  doc,
+  writeBatch 
+} from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
@@ -23,6 +36,13 @@ export default function Transactions() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
+  
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     if (!profile?.orgId) return;
@@ -47,18 +67,41 @@ export default function Transactions() {
     filter === 'all' ? true : tx.type === filter
   );
 
-  const softDeleteTransaction = async (id) => {
-    if (!profile?.orgId) return;
-    try {
-      const txRef = doc(db, 'organizations', profile.orgId, 'transactions', id);
-      await updateDoc(txRef, {
-        isDeleted: true,
-        updatedAt: serverTimestamp(),
-        updatedBy: profile.uid
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `organizations/${profile.orgId}/transactions/${id}`);
-    }
+  const handleDelete = (tx) => {
+    if (profile?.role !== 'admin' && profile?.role !== 'treasurer') return;
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Transaksi',
+      description: `Apakah Bapak/Ibu yakin ingin menghapus catatan "${tx.description}"? Tindakan ini akan membatalkan pengaruh transaksi ini pada saldo kas organisasi.`,
+      onConfirm: async () => {
+        try {
+          const batch = writeBatch(db);
+          const txRef = doc(db, 'organizations', profile.orgId, 'transactions', tx.id);
+          
+          batch.update(txRef, {
+            isDeleted: true,
+            updatedAt: serverTimestamp(),
+            updatedBy: profile.uid
+          });
+
+          const logRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
+          batch.set(logRef, {
+            actorId: profile.uid,
+            actorName: profile.displayName,
+            action: 'transaction_delete',
+            txTitle: tx.description,
+            txAmount: tx.amount,
+            orgId: profile.orgId,
+            timestamp: serverTimestamp()
+          });
+
+          await batch.commit();
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `organizations/${profile.orgId}/transactions/${tx.id}`);
+        }
+      }
+    });
   };
 
   return (
@@ -144,18 +187,18 @@ export default function Transactions() {
                     {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
                   </td>
                   <td className="px-8 py-5 text-right">
-                    <div className="relative group/menu inline-block">
-                      <Button variant="ghost" size="sm" className="p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="p-2 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors group-hover:opacity-100 opacity-0"
+                        onClick={() => handleDelete(tx)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
-                      <div className="hidden group-hover/menu:block absolute right-0 top-full mt-2 w-32 bg-white border border-slate-200 rounded-2xl shadow-xl z-10 py-2">
-                        <button 
-                          onClick={() => softDeleteTransaction(tx.id)}
-                          className="w-full text-left px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                        >
-                          Hapus (Soft)
-                        </button>
-                      </div>
                     </div>
                   </td>
                 </tr>
@@ -215,7 +258,22 @@ export default function Transactions() {
                 };
 
                 try {
-                   await addDoc(collection(db, 'organizations', profile.orgId, 'transactions'), data);
+                   const batch = writeBatch(db);
+                   const txRef = doc(collection(db, 'organizations', profile.orgId, 'transactions'));
+                   batch.set(txRef, data);
+
+                   const logRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
+                   batch.set(logRef, {
+                     actorId: profile.uid,
+                     actorName: profile.displayName,
+                     action: 'transaction',
+                     txTitle: description,
+                     txAmount: amount,
+                     orgId: profile.orgId,
+                     timestamp: serverTimestamp()
+                   });
+
+                   await batch.commit();
                    setIsModalOpen(false);
                 } catch (err) {
                   handleFirestoreError(err, OperationType.CREATE, `organizations/${profile.orgId}/transactions`);
@@ -252,6 +310,14 @@ export default function Transactions() {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+      />
     </div>
   );
 }

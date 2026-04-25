@@ -5,6 +5,8 @@ import {
   Receipt, 
   Users, 
   PiggyBank, 
+  CreditCard,
+  History,
   Settings, 
   LogOut,
   Bell,
@@ -24,8 +26,12 @@ export function Navbar() {
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Arsip Kas', path: '/transactions', icon: Receipt },
-    { name: 'Iuran Rutin', path: '/contributions', icon: Users },
+    { name: 'Iuran Rutin', path: '/contributions', icon: CreditCard },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
+    ...(profile?.role === 'admin' ? [
+      { name: 'Anggota', path: '/members', icon: Users },
+      { name: 'Aktivitas', path: '/activity', icon: History }
+    ] : []),
   ];
 
   return (

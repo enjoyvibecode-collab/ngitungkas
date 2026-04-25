@@ -11,6 +11,8 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Contributions from './pages/Contributions';
 import Savings from './pages/Savings';
+import Members from './pages/Members';
+import ActivityLogs from './pages/ActivityLogs';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
@@ -47,6 +49,8 @@ function AppContent() {
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/contributions" element={<Contributions />} />
                 <Route path="/savings" element={<Savings />} />
+                <Route path="/members" element={<Members />} />
+                <Route path="/activity" element={<ActivityLogs />} />
                 <Route path="/" element={<Navigate to="/dashboard" />} />
               </Routes>
             </main>

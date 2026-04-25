@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
-export function Card({ children, className, title, subtitle, variant = 'default' }) {
+export function Card({ children, className, title, subtitle, variant = 'default', action }) {
   const variants = {
     default: 'bento-card',
     dark: 'bento-card-dark',
@@ -15,10 +15,13 @@ export function Card({ children, className, title, subtitle, variant = 'default'
       animate={{ opacity: 1, y: 0 }}
       className={cn(variants[variant], className)}
     >
-      {(title || subtitle) && (
-        <div className="mb-6">
-          {title && <h3 className={cn("text-xl font-bold tracking-tight", variant === 'default' ? 'text-slate-900' : 'text-white')}>{title}</h3>}
-          {subtitle && <p className={cn("text-xs font-bold uppercase tracking-widest mt-1", variant === 'default' ? 'text-slate-500' : 'text-indigo-200')}>{subtitle}</p>}
+      {(title || subtitle || action) && (
+        <div className="mb-6 flex justify-between items-start">
+          <div>
+            {title && <h3 className={cn("text-xl font-bold tracking-tight", variant === 'default' ? 'text-slate-900' : 'text-white')}>{title}</h3>}
+            {subtitle && <p className={cn("text-xs font-bold uppercase tracking-widest mt-1", variant === 'default' ? 'text-slate-500' : 'text-indigo-200')}>{subtitle}</p>}
+          </div>
+          {action && <div>{action}</div>}
         </div>
       )}
       {children}

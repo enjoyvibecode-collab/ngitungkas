@@ -51,17 +51,29 @@ service cloud.firestore {
       
       // Allow members of the same org to see each other
       allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
-      
       allow list: if isOrgMember(resource.data.orgId);
       
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
-      allow update: if isSignedIn() && request.auth.uid == userId && 
-                       isValidUser(incoming()) && (
-                         // Normal updates (role & orgId are immutable)
-                         (incoming().role == existing().role && incoming().orgId == existing().orgId) ||
-                         // First-time setup: Allow setting orgId and role to admin if currently null
-                         (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
-                       );
+      
+      allow update: if isSignedIn() && (
+        // Case 1: User updating their own profile
+        (request.auth.uid == userId && isValidUser(incoming()) && (
+          // Normal updates (role & orgId are immutable)
+          (incoming().role == existing().role && incoming().orgId == existing().orgId) ||
+          // First-time setup: Allow setting orgId and role to admin if currently null
+          (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
+        )) ||
+        // Case 2: Org Admin managing other members
+        (
+          resource != null && 
+          isOrgAdmin(resource.data.orgId) && 
+          request.auth.uid != userId && 
+          // They can only change role or orgId (leaving)
+          incoming().diff(existing()).affectedKeys().hasOnly(['role', 'orgId']) &&
+          incoming().role in ['admin', 'treasurer', 'member'] &&
+          (incoming().orgId == resource.data.orgId || incoming().orgId == null)
+        )
+      );
     }
 
     // 2. Organization subcollections
@@ -100,6 +112,19 @@ service cloud.firestore {
         allow list: if isOrgTreasurer(orgId);
         
         allow write: if isOrgTreasurer(orgId) && isValidSaving(incoming());
+      }
+
+      // Activity Logs
+      match /activity_logs/{logId} {
+        function isValidActivityLog(data) {
+          return data.actorId == request.auth.uid &&
+                 data.timestamp == request.time &&
+                 data.action in ['promote', 'demote', 'remove', 'role_change'] &&
+                 data.orgId == orgId;
+        }
+
+        allow read: if isOrgMember(orgId);
+        allow create: if isOrgAdmin(orgId) && isValidActivityLog(incoming());
       }
 
       // Savings Logs
