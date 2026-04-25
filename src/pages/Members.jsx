@@ -128,7 +128,7 @@ export default function Members() {
     setConfirmModal({
       isOpen: true,
       title: 'Keluarkan Anggota',
-      description: `PERINGATAN: Apakah Bapak/Ibu yakin ingin mengeluarkan ${member.displayName} dari organisasi? Akses keuangan orang ini akan dicabut seketika dan mereka tidak lagi bisa melihat laporan.`,
+      description: `PERINGATAN: Apakah Bapak/Ibu yakin ingin mengeluarkan ${member.displayName} dari sistem sekolah? Akses keuangan orang ini akan dicabut seketika dan mereka tidak lagi bisa melihat laporan.`,
       variant: 'danger',
       confirmText: 'Keluarkan Sekarang',
       onConfirm: async () => {
@@ -169,6 +169,9 @@ export default function Members() {
   const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
 
   const filteredMembers = members.filter(m => {
+    // Role based filtering for Teacher (Wali Kelas)
+    if (profile?.role === 'teacher' && m.className !== profile?.className) return false;
+
     const matchesSearch = m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           m.nisn?.includes(searchTerm);
@@ -309,8 +312,8 @@ export default function Members() {
                     </td>
                     <td className="px-8 py-5">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">{member.className || 'Tanpa Kelas'}</span>
-                        <span className="text-sm font-bold text-slate-700 tracking-tight">{member.nisn || 'NISN: -'}</span>
+                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">{member.className || 'Belum Diatur'}</span>
+                        <span className="text-sm font-bold text-slate-700 tracking-tight">{member.nisn ? `NISN: ${member.nisn}` : '-'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
@@ -330,17 +333,32 @@ export default function Members() {
                       <td className="px-8 py-5 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                           {isAdmin && member.uid !== profile.uid && (
-                            <select 
-                              disabled={updatingId === member.id}
-                              value={member.role}
-                              onChange={(e) => updateUserRole(member, e.target.value)}
-                              className="text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50 appearance-none shadow-sm cursor-pointer"
-                            >
-                              <option value="member">Siswa</option>
-                              <option value="teacher">Wali Kelas</option>
-                              <option value="treasurer">Bendahara</option>
-                              <option value="admin">Kepala Sekolah</option>
-                            </select>
+                            <div className="flex items-center gap-1">
+                              <select 
+                                disabled={updatingId === member.id}
+                                defaultValue={member.role}
+                                id={`role-select-${member.id}`}
+                                className="text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50 appearance-none shadow-sm cursor-pointer"
+                              >
+                                <option value="member">Siswa</option>
+                                <option value="teacher">Wali Kelas</option>
+                                <option value="treasurer">Bendahara</option>
+                                <option value="admin">Kepala Sekolah</option>
+                              </select>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                disabled={updatingId === member.id}
+                                onClick={() => {
+                                  const select = document.getElementById(`role-select-${member.id}`);
+                                  updateUserRole(member, select.value);
+                                }}
+                                className="rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 w-10 h-10 p-0"
+                                title="Simpan Peran"
+                              >
+                                <ShieldCheck className="w-4 h-4" />
+                              </Button>
+                            </div>
                           )}
                           <Button 
                             variant="ghost" 

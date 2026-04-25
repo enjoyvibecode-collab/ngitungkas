@@ -125,11 +125,14 @@ export default function Contributions() {
 
   const filteredMembers = useMemo(() => {
     return members.filter(m => {
-      const matchesSearch = m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || m.nisn?.includes(searchTerm);
+      // Role based filtering for Teacher (Wali Kelas)
+      if (profile?.role === 'teacher' && m.className !== profile?.className) return false;
+
+      const matchesSearch = (m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (m.nisn || '').includes(searchTerm);
       const matchesClass = selectedClass === 'Semua Kelas' || m.className === selectedClass;
       return matchesSearch && matchesClass;
     });
-  }, [members, searchTerm, selectedClass]);
+  }, [members, searchTerm, selectedClass, profile]);
 
   const classes = useMemo(() => {
     return ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();

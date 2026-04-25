@@ -30,6 +30,13 @@ export default function Savings() {
   const [error, setError] = useState(null);
   const [selectedClass, setSelectedClass] = useState('Semua Kelas');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     if (authLoading || !profile?.orgId) return;
@@ -209,9 +216,13 @@ export default function Savings() {
 
   const filteredSavings = savings.filter(s => {
     const member = members.find(m => m.uid === s.userId || m.id === s.userId);
-    const matchesSearch = s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          member?.nisn?.includes(searchTerm);
-    const matchesClass = selectedClass === 'Semua Kelas' || member?.className === selectedClass;
+    
+    // Role based filtering for Teacher (Wali Kelas)
+    if (profile?.role === 'teacher' && member?.className !== profile?.className) return false;
+
+    const matchesSearch = (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (member?.nisn || '').includes(searchTerm);
+    const matchesClass = selectedClass === 'Semua Kelas' || (member?.className || 'Tanpa Kelas') === selectedClass;
     return matchesSearch && matchesClass;
   });
 
@@ -324,8 +335,10 @@ export default function Savings() {
                 </div>
               );
             }) : (
-              <div className="py-20 text-center">
-                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Belum Ada Data Tabungan</p>
+              <div className="py-24 text-center flex flex-col items-center justify-center opacity-50 group">
+                 <PiggyBank className="w-12 h-12 text-slate-200 mb-4 group-hover:scale-110 transition-transform duration-500" />
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Belum Ada Rekaman Tabungan</p>
+                 <p className="text-[8px] text-slate-300 font-bold uppercase mt-1">Database Digital SMPN 1 Manonjaya</p>
               </div>
             )}
           </div>

@@ -198,23 +198,23 @@ export default function Dashboard() {
         {onboardingMode === 'select' && (
           <div className="max-w-md w-full space-y-6">
             <h2 className="text-3xl font-black text-slate-900 tracking-tight">Selamat Datang!</h2>
-            <p className="text-slate-500 mb-8 font-medium">Bapak/Ibu belum terdaftar di organisasi manapun. Silahkan pilih langkah selanjutnya:</p>
+            <p className="text-slate-500 mb-8 font-medium">Bapak/Ibu belum terdaftar di sistem sekolah. Silahkan pilih langkah selanjutnya:</p>
             <div className="grid gap-4">
               <button 
                 onClick={() => setOnboardingMode('create')}
                 className="flex flex-col items-center p-6 bg-indigo-600 text-white rounded-3xl hover:bg-indigo-700 transition-all text-center group"
               >
                 <TrendingUp className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" />
-                <span className="font-black text-lg">Buat Organisasi Baru</span>
-                <span className="text-xs text-indigo-200 font-bold uppercase tracking-widest mt-1">Hanya untuk Admin/Ketua</span>
+                <span className="font-black text-lg">Buat Data Sekolah Baru</span>
+                <span className="text-xs text-indigo-200 font-bold uppercase tracking-widest mt-1">Hanya untuk Kepala Sekolah/Operator</span>
               </button>
               <button 
                 onClick={() => setOnboardingMode('join')}
                 className="flex flex-col items-center p-6 bg-slate-50 text-slate-900 border border-slate-200 rounded-3xl hover:bg-slate-100 transition-all text-center group"
               >
                 <Users className="w-8 h-8 mb-2 group-hover:scale-110 transition-transform text-indigo-600" />
-                <span className="font-black text-lg">Gabung Organisasi</span>
-                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Untuk Bendahara/Anggota</span>
+                <span className="font-black text-lg">Masuk ke Sistem Sekolah</span>
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Untuk Bendahara/Guru/Siswa</span>
               </button>
             </div>
           </div>
@@ -222,14 +222,14 @@ export default function Dashboard() {
 
         {onboardingMode === 'create' && (
           <div className="max-w-md w-full space-y-6">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Pendaftaran Admin Baru</h2>
-            <p className="text-slate-500 mb-8">Buat organisasi Bapak/Ibu untuk mulai mengelola KAS secara digital.</p>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Pendaftaran Operator Baru</h2>
+            <p className="text-slate-500 mb-8">Buat database sekolah Bapak/Ibu untuk mulai mengelola keuangan secara digital.</p>
             <form onSubmit={handleCreateOrg} className="space-y-4">
               <input 
                 name="orgName" 
                 type="text" 
                 required 
-                placeholder="Nama Organisasi (misal: Karang Taruna RW 05)"
+                placeholder="Nama Sekolah (misal: SMPN 1 Manonjaya)"
                 className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
               />
               <div className="flex gap-2">
@@ -242,14 +242,14 @@ export default function Dashboard() {
 
         {onboardingMode === 'join' && (
           <div className="max-w-md w-full space-y-6">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Gabung Organisasi</h2>
-            <p className="text-slate-500 mb-8">Masukkan ID Organisasi (Slug) yang diberikan oleh Admin Anda.</p>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Masuk ke Sekolah</h2>
+            <p className="text-slate-500 mb-8">Masukkan Kode Sekolah yang diberikan oleh Operator Anda.</p>
             <form onSubmit={handleJoinOrg} className="space-y-4">
               <input 
                 name="orgId" 
                 type="text" 
                 required 
-                placeholder="ID Organisasi (misal: karang-taruna-rt01)"
+                placeholder="Kode Sekolah (misal: smpn-1-manonjaya)"
                 className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
               />
               <div className="flex gap-2">
