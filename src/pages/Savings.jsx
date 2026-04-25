@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button } from '../components/Common';
-import { PiggyBank, Search, Plus, ArrowUpCircle, ArrowDownCircle, History, X } from 'lucide-react';
+import { PiggyBank, Search, Plus, ArrowUpCircle, ArrowDownCircle, History, X, Loader2 } from 'lucide-react';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -18,9 +18,10 @@ import {
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export default function Savings() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const [savings, setSavings] = useState([]);
   const [members, setMembers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,7 +37,10 @@ export default function Savings() {
   });
 
   useEffect(() => {
-    if (!profile?.orgId) return;
+    if (authLoading || !profile?.orgId) return;
+
+    let unsubscribeSavings = null;
+    let unsubscribeMembers = null;
 
     try {
       // Listen to current balances
@@ -44,7 +48,7 @@ export default function Savings() {
         collection(db, 'organizations', profile.orgId, 'savings'),
         orderBy('balance', 'desc')
       );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      unsubscribeSavings = onSnapshot(q, (snapshot) => {
         const stats = snapshot.docs.map(doc => ({ 
           id: doc.id, 
           ...doc.data(),
@@ -52,8 +56,10 @@ export default function Savings() {
         }));
         setSavings(stats);
       }, (err) => {
-        handleFirestoreError(err, OperationType.LIST, `organizations/${profile.orgId}/savings`);
-        setError("Gagal memuat data saldo tabungan.");
+        if (err.code !== 'permission-denied') {
+          handleFirestoreError(err, OperationType.LIST, `organizations/${profile.orgId}/savings`);
+          setError("Gagal memuat data saldo tabungan.");
+        }
       });
 
       // Listen to organization members
@@ -61,31 +67,34 @@ export default function Savings() {
         collection(db, 'users'),
         where('orgId', '==', profile.orgId)
       );
-      const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
+      unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
         const users = snapshot.docs.map(doc => ({ 
           id: doc.id, 
-          uid: doc.id, // Ensure uid exists for older logic
+          uid: doc.id,
           ...doc.data() 
         }));
         setMembers(users);
       }, (err) => {
-        handleFirestoreError(err, OperationType.LIST, `users`);
-        setError("Gagal memuat data anggota.");
+        if (err.code !== 'permission-denied') {
+          handleFirestoreError(err, OperationType.LIST, `users`);
+          setError("Gagal memuat data anggota.");
+        }
       });
 
-      return () => {
-        unsubscribe();
-        unsubscribeMembers();
-      };
     } catch (err) {
       console.error("Setup error in Savings:", err);
       setError("Terjadi kesalahan sistem saat inisialisasi.");
     }
-  }, [profile?.orgId]);
+
+    return () => {
+      if (unsubscribeSavings) unsubscribeSavings();
+      if (unsubscribeMembers) unsubscribeMembers();
+    };
+  }, [profile?.orgId, authLoading]);
 
   const handleTransaction = async (e) => {
     e.preventDefault();
-    if (!profile?.orgId) return;
+    if (!profile?.orgId || !profile?.uid) return;
     
     setIsLoading(true);
     const formData = new FormData(e.currentTarget);
@@ -105,7 +114,7 @@ export default function Savings() {
       const logRef = doc(collection(db, 'organizations', profile.orgId, 'savings_logs'));
       
       const snap = await getDoc(savingRef);
-      const currentBalance = snap.exists() ? snap.data().balance : 0;
+      const currentBalance = snap.exists() ? (Number(snap.data().balance) || 0) : 0;
       
       if (modalType === 'withdraw' && currentBalance < amount) {
         alert("Saldo tidak mencukupi!");
@@ -117,7 +126,7 @@ export default function Savings() {
         ? currentBalance + amount 
         : currentBalance - amount;
 
-      const userName = members.find(m => m.uid === userId)?.displayName || 'Unknown';
+      const userName = members.find(m => (m.uid || m.id) === userId)?.displayName || 'Unknown';
       const actionTitle = modalType === 'deposit' ? 'Setoran Tabungan' : 'Penarikan Tabungan';
 
       // 1. Update/Set Balance State
@@ -165,6 +174,15 @@ export default function Savings() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <p className="text-xs font-black uppercase tracking-widest text-slate-400">Menyiapkan Brankas Tabungan...</p>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
@@ -181,11 +199,17 @@ export default function Savings() {
   if (!profile?.orgId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
+        <PiggyBank className="w-16 h-16 text-slate-200 mb-6" />
         <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Akses Terbatas</h2>
-        <p className="text-slate-500 max-w-sm">Anda harus bergabung ke organisasi untuk mengelola tabungan.</p>
+        <p className="text-slate-500 max-w-sm mb-6">Anda harus bergabung ke organisasi untuk mengelola tabungan.</p>
+        <Button href="/dashboard" variant="brand" size="sm">Kembali ke Dashboard</Button>
       </div>
     );
   }
+
+  const totalBalance = savings.reduce((acc, s) => acc + (Number(s.balance) || 0), 0);
+  const avgBalance = savings.length > 0 ? totalBalance / savings.length : 0;
+  const maxBalance = savings.length > 0 ? Math.max(...savings.map(s => Number(s.balance) || 0)) : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -196,18 +220,18 @@ export default function Savings() {
             Simpanan Mandiri • Kas {profile?.orgId?.replace('_', ' ')}
           </p>
         </div>
-        <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Setor Baru
-        </Button>
+        {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+          <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" /> Setor Baru
+          </Button>
+        )}
       </header>
 
       <div className="grid grid-cols-12 gap-4">
         <Card variant="dark" className="col-span-12 lg:col-span-5 relative overflow-hidden group">
           <div className="relative z-10">
             <p className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Total Tabungan</p>
-            <p className="text-4xl font-black tracking-tight">
-              {formatCurrency(savings.reduce((acc, s) => acc + (s.balance || 0), 0))}
-            </p>
+            <p className="text-4xl font-black tracking-tight">{formatCurrency(totalBalance)}</p>
             <div className="mt-6 flex items-center text-[10px] text-emerald-400 font-black uppercase tracking-wider bg-white/5 py-2 px-3 rounded-xl border border-white/10 w-fit">
               <ArrowUpCircle className="w-3 h-3 mr-1.5" />
               Anggota Aktif: {savings.length}
@@ -217,19 +241,15 @@ export default function Savings() {
         </Card>
 
         <div className="col-span-12 lg:col-span-7 grid grid-cols-2 gap-4">
-          <Card className="flex flex-col justify-center">
+          <Card className="flex flex-col justify-center bg-white">
             <h4 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Rata-rata Saldo</h4>
-            <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatCurrency(savings.length > 0 ? savings.reduce((acc, s) => acc + s.balance, 0) / savings.length : 0)}
-            </p>
+            <p className="text-2xl font-black text-slate-900 tracking-tight">{formatCurrency(avgBalance)}</p>
             <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Per Anggota Aktif</p>
           </Card>
 
-          <Card className="flex flex-col justify-center">
+          <Card className="flex flex-col justify-center bg-white">
             <h4 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Kas Terbesar</h4>
-            <p className="text-2xl font-black text-emerald-600 tracking-tight">
-              {formatCurrency(savings.length > 0 ? Math.max(...savings.map(s => s.balance)) : 0)}
-            </p>
+            <p className="text-2xl font-black text-emerald-600 tracking-tight">{formatCurrency(maxBalance)}</p>
             <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Saldo Tertinggi</p>
           </Card>
         </div>
@@ -251,7 +271,7 @@ export default function Savings() {
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 min-h-[300px]">
             {savings.length > 0 ? savings.map((s) => (
               <div key={s.id} className="flex items-center justify-between p-5 px-8 hover:bg-slate-50 transition-colors group">
                 <div className="flex items-center gap-4">
@@ -268,14 +288,16 @@ export default function Savings() {
                   <div className="text-right">
                     <p className="text-lg font-black text-slate-900 tracking-tight">{formatCurrency(s.balance)}</p>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                    <Button variant="ghost" size="sm" onClick={() => { setModalType('deposit'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100">
-                      <ArrowUpCircle className="w-5 h-5 text-emerald-600" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setModalType('withdraw'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-rose-50 hover:border-rose-100">
-                      <ArrowDownCircle className="w-5 h-5 text-rose-600" />
-                    </Button>
-                  </div>
+                  {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                      <Button variant="ghost" size="sm" onClick={() => { setModalType('deposit'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100">
+                        <ArrowUpCircle className="w-5 h-5 text-emerald-600" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setModalType('withdraw'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-rose-50 hover:border-rose-100">
+                        <ArrowDownCircle className="w-5 h-5 text-rose-600" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )) : (
@@ -287,8 +309,7 @@ export default function Savings() {
         </Card>
 
         <Card title="Log Aktivitas" variant="accent" className="col-span-12 lg:col-span-4">
-           {/* Here I would listen to savings_logs but for now keeping placeholders or similar log items */}
-           <SavingsLogList orgId={profile.orgId} />
+           <SavingsLogList orgId={profile?.orgId} />
         </Card>
       </div>
 
@@ -306,7 +327,7 @@ export default function Savings() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="z-[70] bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl relative border border-slate-200"
+              className="z-[110] bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl relative border border-slate-200"
             >
               <h2 className="text-3xl font-black text-slate-900 mb-8 tracking-tight text-center uppercase tracking-tighter">
                 {modalType === 'deposit' ? 'Setor Tabungan' : 'Tarik Tabungan'}
@@ -315,12 +336,17 @@ export default function Savings() {
               <form onSubmit={handleTransaction} className="space-y-6">
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Anggota</label>
-                  <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
-                    <option value="">-- Pilih Nama --</option>
-                    {members.map(m => (
-                      <option key={m.id} value={m.id}>{m.displayName || m.email}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
+                      <option value="">-- Pilih Nama --</option>
+                      {members.map(m => (
+                        <option key={m.id} value={m.id}>{m.displayName || m.email}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ArrowDownCircle className="w-4 h-4 text-slate-400" />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Nominal (IDR)</label>
@@ -332,7 +358,7 @@ export default function Savings() {
                 </div>
                 
                 <div className="pt-6 flex gap-4">
-                  <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>Batal</Button>
+                  <Button type="button" variant="ghost" className="flex-1 bg-slate-100 hover:bg-slate-200" onClick={() => setIsModalOpen(false)}>Batal</Button>
                   <Button type="submit" variant={modalType === 'deposit' ? 'brand' : 'outline'} isLoading={isLoading} className="flex-[2]">
                     {modalType === 'deposit' ? 'Konfirmasi Setor' : 'Konfirmasi Tarik'}
                   </Button>
@@ -358,24 +384,40 @@ export default function Savings() {
 
 function SavingsLogList({ orgId }) {
   const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!orgId) return;
     const q = query(
       collection(db, 'organizations', orgId, 'savings_logs'),
       orderBy('createdAt', 'desc'),
-      limit(5)
+      limit(10)
     );
-    return onSnapshot(q, (snap) => {
+    const unsubscribe = onSnapshot(q, (snap) => {
       setLogs(snap.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data(),
         amount: Number(doc.data().amount) || 0
       })));
+      setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `organizations/${orgId}/savings_logs`);
+      if (error.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.LIST, `organizations/${orgId}/savings_logs`);
+      }
+      setLoading(false);
     });
+
+    return () => unsubscribe();
   }, [orgId]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 opacity-50">
+        <Loader2 className="w-6 h-6 animate-spin text-white mb-2" />
+        <p className="text-[8px] font-black uppercase tracking-widest text-white">Memuat Log...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -412,10 +454,13 @@ function SavingLogItem({ type, name, amount, date, isDark }) {
           "text-sm font-bold tracking-tight",
           isDark ? "text-white" : "text-slate-900"
         )}>
-          {name} <span className={cn(
-            "font-black mx-1",
+          <span className="font-medium mr-1 opacity-70">{name}</span>
+          <span className={cn(
+            "font-black mx-1 uppercase text-[10px] tracking-widest",
             type === 'deposit' ? "text-emerald-400" : "text-rose-400"
-          )}>{type === 'deposit' ? 'setor' : 'tarik'}</span> {formatCurrency(amount)}
+          )}>{type === 'deposit' ? 'setor' : 'tarik'}</span>
+          <br />
+          <span className="text-lg font-black">{formatCurrency(amount)}</span>
         </p>
         <p className={cn(
           "text-[10px] font-black uppercase tracking-widest mt-1",
