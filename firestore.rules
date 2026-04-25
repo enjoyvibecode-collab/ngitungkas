@@ -43,15 +43,15 @@ service cloud.firestore {
 
     // 1. Users Collection
     match /users/{userId} {
-      function isValidUser(data) {
-        return data.uid == request.auth.uid &&
-               data.displayName is string && data.displayName.size() <= 100 &&
-               data.email is string &&
-               data.role in ['admin', 'treasurer', 'teacher', 'member'] &&
+      function isValidUserSchema(data) {
+        return (data.displayName is string && data.displayName.size() <= 100) &&
+               (data.email is string) &&
+               (data.role in ['admin', 'treasurer', 'teacher', 'member']) &&
                (data.orgId == null || (data.orgId is string && data.orgId.size() <= 64)) &&
-               (data.className == null || data.className is string) &&
-               (data.nisn == null || data.nisn is string) &&
-               (data.parentPhone == null || data.parentPhone is string);
+               (data.className == null || (data.className is string && data.className.size() <= 20)) &&
+               (data.nisn == null || (data.nisn is string && data.nisn.size() <= 30)) &&
+               (data.phone == null || (data.phone is string && data.phone.size() <= 20)) &&
+               (data.parentPhone == null || (data.parentPhone is string && data.parentPhone.size() <= 20));
       }
 
       // Allow users to read their own profile
@@ -59,26 +59,38 @@ service cloud.firestore {
       
       // Allow members of the same org to see each other
       allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
-      allow list: if isOrgMember(request.query.limit > 0 ? getProfile().orgId : 'none'); // Simplified for list
+      allow list: if isSignedIn() && (request.query.limit > 0); // Broad list allowed, filtered by query
       
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUserSchema(incoming()) && incoming().uid == userId;
       
-      allow update: if isSignedIn() && (
+      allow update: if isSignedIn() && isValidUserSchema(incoming()) && (
         // Case 1: User updating their own profile
         (request.auth.uid == userId && (
-          // Normal updates
-          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'className', 'nisn', 'parentPhone']) ||
+          // Students/Teachers can update personal info, but NOT role/orgId
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn']) ||
           // First-time setup
           (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
         )) ||
-        // Case 2: Admin/Treasurer managing other members
+        // Case 2: Administrative Updates (Other Users)
         (
-          resource != null && 
-          isOrgTreasurer(resource.data.orgId) && 
-          request.auth.uid != userId && 
-          // They can update more fields for students
-          incoming().diff(existing()).affectedKeys().hasAll(['role']) == false && 
-          (isOrgAdmin(resource.data.orgId) || incoming().role == existing().role)
+          resource != null && request.auth.uid != userId && 
+          isOrgMember(resource.data.orgId) &&
+          (
+            // ADMIN: Full control except immutable system keys
+            (isOrgAdmin(resource.data.orgId) && 
+             incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false) ||
+            
+            // TREASURER: Finance + Contact info. NO role/orgId/className.
+            (isOrgTreasurer(resource.data.orgId) && 
+             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'photoURL', 'nisn']) &&
+             incoming().role == existing().role && incoming().orgId == existing().orgId) ||
+            
+            // TEACHER: Classmates only. Can edit student details.
+            (getProfile().role == 'teacher' && 
+             existing().className == getProfile().className &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'className', 'nisn', 'photoURL']) &&
+             incoming().role == existing().role && incoming().orgId == existing().orgId)
+          )
         )
       );
     }

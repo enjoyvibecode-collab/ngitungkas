@@ -185,19 +185,32 @@ export default function Members() {
     
     const formData = new FormData(e.currentTarget);
     const updates = {
-      className: formData.get('className'),
-      nisn: formData.get('nisn'),
-      parentPhone: formData.get('parentPhone'),
+      className: formData.get('className') || null,
+      nisn: formData.get('nisn') || null,
+      parentPhone: formData.get('parentPhone') || null,
+      phone: formData.get('phone') || null,
       displayName: formData.get('displayName')
     };
+
+    // Form Validation (Defensive)
+    if (updates.nisn && updates.nisn.length > 30) return alert("NISN maksimal 30 karakter");
+    if (updates.className && updates.className.length > 20) return alert("Kelas maksimal 20 karakter");
+    if (updates.phone && updates.phone.length > 20) return alert("No. WA maksimal 20 karakter");
+    if (updates.parentPhone && updates.parentPhone.length > 20) return alert("WA Ortu maksimal 20 karakter");
 
     setUpdatingId(editingMember.id);
     try {
       await updateDoc(doc(db, 'users', editingMember.id), updates);
       setIsEditModalOpen(false);
+      // Optional: show a success toast if available, otherwise alert is fine
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${editingMember.id}`);
-      alert("Gagal memperbarui profil siswa.");
+      console.error("Update failed:", err);
+      if (err.code === 'permission-denied') {
+        alert("Akses Ditolak: Bapak/Ibu tidak memiliki wewenang untuk mengubah data siswa ini atau format data tidak valid.");
+      } else {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${editingMember.id}`);
+        alert("Terjadi kesalahan sistem saat menyimpan data.");
+      }
     } finally {
       setUpdatingId(null);
     }
@@ -530,9 +543,15 @@ export default function Members() {
                     <input name="nisn" defaultValue={editingMember?.nisn} placeholder="10 Digit" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold text-center" />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">WA Orang Tua (PII)</label>
-                  <input name="parentPhone" defaultValue={editingMember?.parentPhone} placeholder="08..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">WA Siswa</label>
+                    <input name="phone" defaultValue={editingMember?.phone} placeholder="628..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">WA Orang Tua</label>
+                    <input name="parentPhone" defaultValue={editingMember?.parentPhone} placeholder="628..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                  </div>
                 </div>
                 
                 <div className="pt-4 flex gap-3">

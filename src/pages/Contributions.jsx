@@ -252,7 +252,7 @@ export default function Contributions() {
              date: Timestamp.fromDate(new Date(currentYear, currentMonth, 15)),
              memberId: member.uid || member.id,
              memberName: member.displayName,
-             memberClass: member.className || '?',
+             memberClass: member.className || 'Belum Diatur',
              createdBy: profile.uid,
              createdAt: serverTimestamp(),
              orgId: profile.orgId
@@ -425,7 +425,7 @@ export default function Contributions() {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-slate-900">{member.displayName || 'Unnamed Student'}</p>
-                      <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-black uppercase">{member.className || 'N/A'}</span>
+                      <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-black uppercase">{member.className || 'Belum Diatur'}</span>
                     </div>
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.1em]">NISN: {member.nisn || '-'}</p>
                   </div>

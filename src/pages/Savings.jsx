@@ -209,18 +209,19 @@ export default function Savings() {
     );
   }
 
-  const totalBalance = savings.reduce((acc, s) => acc + (Number(s.balance) || 0), 0);
-  const avgBalance = savings.length > 0 ? totalBalance / savings.length : 0;
+  const totalBalance = savings?.reduce((acc, s) => acc + (Number(s?.balance) || 0), 0) || 0;
+  const avgBalance = savings?.length > 0 ? totalBalance / savings.length : 0;
   
-  const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
+  const classes = ['Semua Kelas', ...new Set((members || []).map(m => m?.className || 'Tanpa Kelas'))].sort();
 
-  const filteredSavings = savings.filter(s => {
-    const member = members.find(m => m.uid === s.userId || m.id === s.userId);
+  const filteredSavings = (savings || []).filter(s => {
+    if (!s) return false;
+    const member = members?.find(m => (m?.uid === s?.userId || m?.id === s?.userId));
     
     // Role based filtering for Teacher (Wali Kelas)
     if (profile?.role === 'teacher' && member?.className !== profile?.className) return false;
 
-    const matchesSearch = (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = (s?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (member?.nisn || '').includes(searchTerm);
     const matchesClass = selectedClass === 'Semua Kelas' || (member?.className || 'Tanpa Kelas') === selectedClass;
     return matchesSearch && matchesClass;
@@ -301,16 +302,17 @@ export default function Savings() {
 
           <div className="divide-y divide-slate-100 min-h-[300px]">
             {filteredSavings.length > 0 ? filteredSavings.map((s) => {
-              const student = members.find(m => m.uid === s.userId || m.id === s.userId);
+              if (!s) return null;
+              const student = (members || []).find(m => (m?.uid === s?.userId || m?.id === s?.userId));
               return (
                 <div key={s.id} className="flex items-center justify-between p-5 px-8 hover:bg-slate-50 transition-colors group">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs uppercase">
-                      {s.name?.charAt(0) || 'U'}
+                      {(s.name || student?.displayName || 'U').charAt(0)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-900">{s.name || 'Siswa'}</p>
+                        <p className="text-sm font-bold text-slate-900">{s.name || student?.displayName || 'Siswa'}</p>
                         <span className="text-[8px] bg-slate-100 px-1.5 py-0.5 rounded font-black text-slate-400 uppercase">{student?.className || 'N/A'}</span>
                       </div>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">NISN: {student?.nisn || '-'} • Update: {formatDate(s.lastUpdated)}</p>
@@ -375,8 +377,8 @@ export default function Savings() {
                   <div className="relative">
                     <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
                       <option value="">-- Pilih Nama --</option>
-                      {members.map(m => (
-                        <option key={m.id} value={m.id}>{m.displayName || m.email} ({m.className || '?'})</option>
+                      {(members || []).map(m => (
+                        <option key={m?.id} value={m?.id}>{m?.displayName || m?.email || 'User'} ({m?.className || '?'})</option>
                       ))}
                     </select>
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
