@@ -267,9 +267,9 @@ export default function Dashboard() {
     <div className="flex flex-col gap-6">
       <header className="flex justify-between items-end border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">SMP Negeri 1 Manonjaya</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Manajemen Kas {profile?.orgId?.replace('_', ' ')} • Real-time Sync
+            Sistem Tabungan Digital Sekolah • NgitungKas Edu
           </p>
         </div>
         <div className="flex gap-2">
@@ -281,7 +281,7 @@ export default function Dashboard() {
         {/* Main Stats Bento Row */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <StatCard 
-            title="Total Saldo" 
+            title="Total Tabungan Sekolah" 
             value={formatCurrency(stats.balance)} 
             icon={Wallet} 
             trend="+12.5%" 
@@ -290,17 +290,17 @@ export default function Dashboard() {
           />
           <div className="grid grid-cols-2 gap-4">
             <StatCard 
-              title="Pemasukan" 
+              title="Setoran Hari Ini" 
               value={formatCurrency(stats.income)} 
               icon={TrendingUp} 
               trend="+5%" 
               isPositive 
             />
             <StatCard 
-              title="Pengeluaran" 
+              title="Penarikan Hari Ini" 
               value={formatCurrency(stats.expense)} 
               icon={TrendingDown} 
-              trend="+8%" 
+              trend="+2%" 
               isPositive={false} 
             />
           </div>
@@ -338,12 +338,12 @@ export default function Dashboard() {
 
         {/* Members Quick List */}
         <Card 
-          title="Anggota Organisasi" 
+          title="Data Siswa Terakhir" 
           className="col-span-12 lg:col-span-6"
           action={
-            isAdmin && (
+            (isAdmin || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
               <Link to="/members" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
-                Kelola
+                Lihat Semua Siswa
               </Link>
             )
           }
@@ -355,7 +355,9 @@ export default function Dashboard() {
                     <img src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
                     <div>
                       <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{member.role}</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                        {member.className || 'Tanpa Kelas'} • NISN: {member.nisn || '-'}
+                      </div>
                     </div>
                   </div>
                   <span className={cn(
@@ -366,19 +368,19 @@ export default function Dashboard() {
                   </span>
                </div>
              )) : (
-               <p className="text-center text-xs text-slate-400 py-4 font-bold uppercase tracking-widest">No members found</p>
+               <p className="text-center text-xs text-slate-400 py-4 font-bold uppercase tracking-widest">Belum ada data siswa</p>
              )}
            </div>
         </Card>
 
         {/* Needs Follow Up Widget */}
         <Card 
-          title="Perlu Follow Up" 
-          subtitle="Anggota Belum Bayar Bulan Ini"
+          title="Belum Menabung" 
+          subtitle="Siswa Belum Iuran Bulan Ini"
           className="col-span-12 lg:col-span-6"
           action={
             <Link to="/contributions" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
-              Lihat Semua
+              Lihat Detail
             </Link>
           }
         >

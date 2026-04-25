@@ -28,13 +28,8 @@ export default function Savings() {
   const [isLoading, setIsLoading] = useState(false);
   const [modalType, setModalType] = useState('deposit'); // 'deposit' or 'withdraw'
   const [error, setError] = useState(null);
-  
-  const [confirmModal, setConfirmModal] = useState({
-    isOpen: false,
-    title: '',
-    description: '',
-    onConfirm: () => {}
-  });
+  const [selectedClass, setSelectedClass] = useState('Semua Kelas');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (authLoading || !profile?.orgId) return;
@@ -209,20 +204,29 @@ export default function Savings() {
 
   const totalBalance = savings.reduce((acc, s) => acc + (Number(s.balance) || 0), 0);
   const avgBalance = savings.length > 0 ? totalBalance / savings.length : 0;
-  const maxBalance = savings.length > 0 ? Math.max(...savings.map(s => Number(s.balance) || 0)) : 0;
+  
+  const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
+
+  const filteredSavings = savings.filter(s => {
+    const member = members.find(m => m.uid === s.userId || m.id === s.userId);
+    const matchesSearch = s.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          member?.nisn?.includes(searchTerm);
+    const matchesClass = selectedClass === 'Semua Kelas' || member?.className === selectedClass;
+    return matchesSearch && matchesClass;
+  });
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Tabungan Anggota</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Tabungan Siswa</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Simpanan Mandiri • Kas {profile?.orgId?.replace('_', ' ')}
+            Simpanan Mandiri • SMP Negeri 1 Manonjaya
           </p>
         </div>
-        {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+        {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
           <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" /> Setor Baru
+            <Plus className="w-4 h-4 mr-2" /> Setor Tabungan
           </Button>
         )}
       </header>
@@ -244,65 +248,84 @@ export default function Savings() {
           <Card className="flex flex-col justify-center bg-white">
             <h4 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Rata-rata Saldo</h4>
             <p className="text-2xl font-black text-slate-900 tracking-tight">{formatCurrency(avgBalance)}</p>
-            <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Per Anggota Aktif</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Per Siswa Aktif</p>
           </Card>
 
           <Card className="flex flex-col justify-center bg-white">
-            <h4 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Kas Terbesar</h4>
-            <p className="text-2xl font-black text-emerald-600 tracking-tight">{formatCurrency(maxBalance)}</p>
-            <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Saldo Tertinggi</p>
+            <h4 className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Total Entri</h4>
+            <p className="text-2xl font-black text-emerald-600 tracking-tight">{savings.length}</p>
+            <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-tighter">Database Siswa</p>
           </Card>
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <Card title="Daftar Saldo Per Anggota" className="col-span-12 lg:col-span-8 p-0 overflow-hidden">
+        <Card title="Database Tabungan Siswa" className="col-span-12 lg:col-span-8 p-0 overflow-hidden">
           <div className="p-6 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Cari nama anggota..." 
-                className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none"
-              />
+            <div className="flex flex-1 gap-2 flex-wrap sm:flex-nowrap">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Cari Nama / NISN..." 
+                  className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none"
+                />
+              </div>
+              <select 
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none min-w-[140px]"
+              >
+                {classes.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
             <div className="flex gap-2">
-               <span className="text-[8px] font-black tracking-widest uppercase bg-slate-200 text-slate-500 px-2 py-1 rounded-md">{savings.length} Terdata</span>
+               <span className="text-[8px] font-black tracking-widest uppercase bg-slate-200 text-slate-500 px-2 py-1 rounded-md">{filteredSavings.length} Ditemukan</span>
             </div>
           </div>
 
           <div className="divide-y divide-slate-100 min-h-[300px]">
-            {savings.length > 0 ? savings.map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-5 px-8 hover:bg-slate-50 transition-colors group">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs uppercase">
-                    {s.name?.charAt(0) || 'U'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{s.name || 'Member'}</p>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Update: {formatDate(s.lastUpdated)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-lg font-black text-slate-900 tracking-tight">{formatCurrency(s.balance)}</p>
-                  </div>
-                  {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                      <Button variant="ghost" size="sm" onClick={() => { setModalType('deposit'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100">
-                        <ArrowUpCircle className="w-5 h-5 text-emerald-600" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => { setModalType('withdraw'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-rose-50 hover:border-rose-100">
-                        <ArrowDownCircle className="w-5 h-5 text-rose-600" />
-                      </Button>
+            {filteredSavings.length > 0 ? filteredSavings.map((s) => {
+              const student = members.find(m => m.uid === s.userId || m.id === s.userId);
+              return (
+                <div key={s.id} className="flex items-center justify-between p-5 px-8 hover:bg-slate-50 transition-colors group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs uppercase">
+                      {s.name?.charAt(0) || 'U'}
                     </div>
-                  )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900">{s.name || 'Siswa'}</p>
+                        <span className="text-[8px] bg-slate-100 px-1.5 py-0.5 rounded font-black text-slate-400 uppercase">{student?.className || 'N/A'}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">NISN: {student?.nisn || '-'} • Update: {formatDate(s.lastUpdated)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <p className="text-lg font-black text-slate-900 tracking-tight">{formatCurrency(s.balance)}</p>
+                    </div>
+                    {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
+                        <Button variant="ghost" size="sm" onClick={() => { setModalType('deposit'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100">
+                          <ArrowUpCircle className="w-5 h-5 text-emerald-600" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => { setModalType('withdraw'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-rose-50 hover:border-rose-100">
+                          <ArrowDownCircle className="w-5 h-5 text-rose-600" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )) : (
+              );
+            }) : (
               <div className="py-20 text-center">
-                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Belum Ada Saldo Tabungan</p>
+                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Belum Ada Data Tabungan</p>
               </div>
             )}
           </div>
@@ -335,12 +358,12 @@ export default function Savings() {
               
               <form onSubmit={handleTransaction} className="space-y-6">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Anggota</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Siswa</label>
                   <div className="relative">
                     <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
                       <option value="">-- Pilih Nama --</option>
                       {members.map(m => (
-                        <option key={m.id} value={m.id}>{m.displayName || m.email}</option>
+                        <option key={m.id} value={m.id}>{m.displayName || m.email} ({m.className || '?'})</option>
                       ))}
                     </select>
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">

@@ -98,7 +98,7 @@ export default function ActivityLogs() {
     return (
       <div className="p-12 text-center bg-white rounded-[3rem] border border-slate-200">
         <h2 className="text-2xl font-black text-slate-900 leading-tight">Akses Terbatas</h2>
-        <p className="mt-2 text-slate-500 font-medium max-w-xs mx-auto">Hanya Administrator yang dapat melihat Audit Logs sistem.</p>
+        <p className="mt-2 text-slate-500 font-medium max-w-xs mx-auto">Hanya Kepala Sekolah (Tingkat Pimpinan) yang dapat melihat Audit Logs sistem.</p>
       </div>
     );
   }
@@ -107,10 +107,10 @@ export default function ActivityLogs() {
     <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-slate-200 pb-10">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Audit Log Sistem</h1>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Log Aktivitas Sekolah</h1>
           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-            Pemantauan Real-time Aktif
+            Pemantauan Digital Real-time
           </p>
         </div>
 
@@ -198,10 +198,10 @@ export default function ActivityLogs() {
                         <span>Mengubah peran <span className="text-indigo-600">{log.targetUserName}</span> dari <span className="uppercase">{log.oldRole}</span> menjadi <span className="uppercase text-emerald-600">{log.newRole}</span></span>
                       )}
                       {log.action === 'remove' && (
-                        <span>Mencabut akses dan mengeluarkan <span className="text-rose-600">{log.targetUserName}</span> dari komunitas</span>
+                        <span>Mencabut akses dan mengeluarkan <span className="text-rose-600">{log.targetUserName}</span> dari sistem sekolah</span>
                       )}
                       {log.action === 'join' && (
-                        <span>Memulai bergabung dalam komunitas sebagai anggota terverifikasi</span>
+                        <span>Berhasil bergabung dalam sistem sekolah sebagai pengguna terverifikasi</span>
                       )}
                       {log.action === 'transaction' && (
                         <span>Mencatat transaksi keuangan baru: <span className="text-emerald-600">{log.txTitle}</span></span>

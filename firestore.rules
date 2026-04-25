@@ -36,14 +36,22 @@ service cloud.firestore {
       return isOrgMember(orgId) && (p.role == 'admin' || p.role == 'treasurer');
     }
 
+    function isOrgTeacher(orgId) {
+      let p = getProfile();
+      return isOrgMember(orgId) && (p.role == 'admin' || p.role == 'treasurer' || p.role == 'teacher');
+    }
+
     // 1. Users Collection
     match /users/{userId} {
       function isValidUser(data) {
         return data.uid == request.auth.uid &&
                data.displayName is string && data.displayName.size() <= 100 &&
                data.email is string &&
-               data.role in ['admin', 'treasurer', 'member'] &&
-               (data.orgId == null || (data.orgId is string && data.orgId.size() <= 50));
+               data.role in ['admin', 'treasurer', 'teacher', 'member'] &&
+               (data.orgId == null || (data.orgId is string && data.orgId.size() <= 64)) &&
+               (data.className == null || data.className is string) &&
+               (data.nisn == null || data.nisn is string) &&
+               (data.parentPhone == null || data.parentPhone is string);
       }
 
       // Allow users to read their own profile
@@ -51,27 +59,26 @@ service cloud.firestore {
       
       // Allow members of the same org to see each other
       allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
-      allow list: if isOrgMember(resource.data.orgId);
+      allow list: if isOrgMember(request.query.limit > 0 ? getProfile().orgId : 'none'); // Simplified for list
       
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
       
       allow update: if isSignedIn() && (
         // Case 1: User updating their own profile
-        (request.auth.uid == userId && isValidUser(incoming()) && (
-          // Normal updates (role & orgId are immutable)
-          (incoming().role == existing().role && incoming().orgId == existing().orgId) ||
-          // First-time setup: Allow setting orgId and role to admin if currently null
+        (request.auth.uid == userId && (
+          // Normal updates
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'className', 'nisn', 'parentPhone']) ||
+          // First-time setup
           (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
         )) ||
-        // Case 2: Org Admin managing other members
+        // Case 2: Admin/Treasurer managing other members
         (
           resource != null && 
-          isOrgAdmin(resource.data.orgId) && 
+          isOrgTreasurer(resource.data.orgId) && 
           request.auth.uid != userId && 
-          // They can only change role or orgId (leaving)
-          incoming().diff(existing()).affectedKeys().hasOnly(['role', 'orgId']) &&
-          incoming().role in ['admin', 'treasurer', 'member'] &&
-          (incoming().orgId == resource.data.orgId || incoming().orgId == null)
+          // They can update more fields for students
+          incoming().diff(existing()).affectedKeys().hasAll(['role']) == false && 
+          (isOrgAdmin(resource.data.orgId) || incoming().role == existing().role)
         )
       );
     }
@@ -94,8 +101,8 @@ service cloud.firestore {
         }
 
         allow read: if isOrgMember(orgId);
-        allow create: if isOrgTreasurer(orgId) && isValidId(txId) && isValidTransaction(incoming());
-        allow update: if isOrgTreasurer(orgId) && 
+        allow create: if isOrgTeacher(orgId) && isValidId(txId) && isValidTransaction(incoming());
+        allow update: if isOrgTeacher(orgId) && 
                          isValidTransaction(incoming()) &&
                          // Soft delete or field update tracking
                          (incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'category', 'description', 'amount']));
@@ -108,10 +115,10 @@ service cloud.firestore {
                  data.balance is number;
         }
 
-        allow get: if isVerified() && (request.auth.uid == userId || isOrgTreasurer(orgId));
-        allow list: if isOrgTreasurer(orgId);
+        allow get: if isVerified() && (request.auth.uid == userId || isOrgTeacher(orgId));
+        allow list: if isOrgTeacher(orgId);
         
-        allow write: if isOrgTreasurer(orgId) && isValidSaving(incoming());
+        allow write: if isOrgTeacher(orgId) && isValidSaving(incoming());
       }
 
       // Activity Logs
@@ -136,8 +143,8 @@ service cloud.firestore {
                  data.createdBy == request.auth.uid;
         }
 
-        allow read: if isVerified() && (request.auth.uid == resource.data.userId || isOrgTreasurer(orgId));
-        allow create: if isOrgTreasurer(orgId) && isValidLog(incoming());
+        allow read: if isVerified() && (request.auth.uid == resource.data.userId || isOrgTeacher(orgId));
+        allow create: if isOrgTeacher(orgId) && isValidLog(incoming());
       }
     }
   }

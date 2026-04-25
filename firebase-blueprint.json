@@ -9,8 +9,11 @@
         "displayName": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "treasurer", "member"] },
+        "role": { "type": "string", "enum": ["admin", "treasurer", "teacher", "member"] },
         "orgId": { "type": "string" },
+        "className": { "type": "string" },
+        "nisn": { "type": "string" },
+        "parentPhone": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "orgId", "role"]

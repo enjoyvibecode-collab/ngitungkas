@@ -40,6 +40,7 @@ export default function Contributions() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState('Semua Kelas');
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
 
@@ -123,10 +124,16 @@ export default function Contributions() {
   }, [transactions]);
 
   const filteredMembers = useMemo(() => {
-    return members.filter(m => 
-      m.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [members, searchTerm]);
+    return members.filter(m => {
+      const matchesSearch = m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || m.nisn?.includes(searchTerm);
+      const matchesClass = selectedClass === 'Semua Kelas' || m.className === selectedClass;
+      return matchesSearch && matchesClass;
+    });
+  }, [members, searchTerm, selectedClass]);
+
+  const classes = useMemo(() => {
+    return ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
+  }, [members]);
 
   const paidCount = members.filter(m => paymentMap[m.uid || m.id]).length;
   const unpaidCount = members.length - paidCount;
@@ -219,8 +226,8 @@ export default function Contributions() {
 
   const handleManualVerify = (member) => {
      if (!profile?.orgId) return;
-     if (profile.role !== 'admin' && profile.role !== 'treasurer') {
-       alert("Hanya Admin atau Bendahara yang bisa verifikasi iuran.");
+     if (profile.role !== 'admin' && profile.role !== 'treasurer' && profile.role !== 'teacher') {
+       alert("Hanya Pimpinan, Bendahara, atau Wali Kelas yang bisa verifikasi iuran.");
        return;
      }
 
@@ -232,7 +239,7 @@ export default function Contributions() {
          try {
            const batch = writeBatch(db);
            const txRef = doc(collection(db, 'organizations', profile.orgId, 'transactions'));
-           const txTitle = `Iuran Rutin - ${months[currentMonth]} ${currentYear}`;
+           const txTitle = `Iuran Siswa - ${months[currentMonth]} ${currentYear}`;
            
            batch.set(txRef, {
              title: txTitle,
@@ -242,6 +249,7 @@ export default function Contributions() {
              date: Timestamp.fromDate(new Date(currentYear, currentMonth, 15)),
              memberId: member.uid || member.id,
              memberName: member.displayName,
+             memberClass: member.className || '?',
              createdBy: profile.uid,
              createdAt: serverTimestamp(),
              orgId: profile.orgId
@@ -298,9 +306,9 @@ export default function Contributions() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Iuran Rutin</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Iuran Bulanan</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Membership Ledger • Tahun Buku {currentYear}
+            SPP & Iuran Sekolah • SMP Negeri 1 Manonjaya
           </p>
         </div>
         
@@ -364,28 +372,39 @@ export default function Contributions() {
         </Card>
       </div>
 
-      <Card title="Status Pembayaran Anggota" className="p-0 overflow-hidden">
-        <div className="p-6 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Cari nama anggota..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none"
-            />
+      <Card title="Status Pembayaran Siswa" className="p-0 overflow-hidden">
+        <div className="p-6 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-1 gap-2 w-full">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Cari Nama / NISN..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none"
+              />
+            </div>
+            <select 
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              className="px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-slate-900 outline-none min-w-[120px]"
+            >
+              {classes.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-             Total: {filteredMembers.length} Anggota
+             Total: {filteredMembers.length} Siswa
           </div>
         </div>
         
         <div className="divide-y divide-slate-100">
           {loading ? (
-             <div className="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Memuat data anggota...</div>
+             <div className="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Memuat data...</div>
           ) : filteredMembers.length === 0 ? (
-             <div className="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Tidak ada anggota ditemukan</div>
+             <div className="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Tidak ada data ditemukan</div>
           ) : filteredMembers.map((member) => {
             const isPaid = paymentMap[member.uid || member.id];
             return (
@@ -395,14 +414,17 @@ export default function Contributions() {
                     {member.photoURL ? (
                        <img src={member.photoURL} alt="" className="w-full h-full object-cover" />
                     ) : (
-                       <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs">
+                       <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase">
                          {(member.displayName || 'U').charAt(0)}
                        </div>
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900">{member.displayName || 'Unnamed Member'}</p>
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.1em]">{member.role || 'Member'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-slate-900">{member.displayName || 'Unnamed Student'}</p>
+                      <span className="text-[8px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-black uppercase">{member.className || 'N/A'}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.1em]">NISN: {member.nisn || '-'}</p>
                   </div>
                 </div>
 

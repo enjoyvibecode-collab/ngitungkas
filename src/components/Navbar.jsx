@@ -28,8 +28,8 @@ export function Navbar() {
     { name: 'Arsip Kas', path: '/transactions', icon: Receipt },
     { name: 'Iuran Rutin', path: '/contributions', icon: CreditCard },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
-    ...(profile?.role === 'admin' ? [
-      { name: 'Anggota', path: '/members', icon: Users },
+    ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher' ? [
+      { name: 'Siswa', path: '/members', icon: Users },
       { name: 'Aktivitas', path: '/activity', icon: History }
     ] : []),
   ];
@@ -44,8 +44,8 @@ export function Navbar() {
                 <Receipt className="text-white w-5 h-5" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xl font-black tracking-tighter text-slate-900 leading-none">Ngitung KAS</span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Smart Ledger</span>
+                <span className="text-xl font-black tracking-tighter text-slate-900 leading-none">NgitungKas Edu</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Sistem Tabungan Sekolah</span>
               </div>
             </Link>
             
@@ -81,7 +81,9 @@ export function Navbar() {
                 <p className="text-xs font-black text-slate-900 tracking-tight">{profile?.displayName}</p>
                 <div className="flex items-center justify-end gap-1.5 mt-1">
                   <p className="text-[9px] text-indigo-600 font-black uppercase tracking-widest leading-none bg-indigo-50 px-1.5 py-0.5 rounded-full">
-                    {profile?.role}
+                    {profile?.role === 'admin' ? 'Kepala Sekolah' : 
+                     profile?.role === 'treasurer' ? 'Bendahara' : 
+                     profile?.role === 'teacher' ? 'Wali Kelas' : 'Siswa'}
                   </p>
                   {profile?.orgId && (
                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none border border-slate-200 px-1.5 py-0.5 rounded-full">

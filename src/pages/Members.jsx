@@ -34,6 +34,9 @@ export default function Members() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState('Semua Kelas');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({
@@ -163,10 +166,39 @@ export default function Members() {
   };
 
   const isAdmin = profile?.role === 'admin';
-  const filteredMembers = members.filter(m => 
-    m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
+
+  const filteredMembers = members.filter(m => {
+    const matchesSearch = m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          m.nisn?.includes(searchTerm);
+    const matchesClass = selectedClass === 'Semua Kelas' || m.className === selectedClass;
+    return matchesSearch && matchesClass;
+  });
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!editingMember) return;
+    
+    const formData = new FormData(e.currentTarget);
+    const updates = {
+      className: formData.get('className'),
+      nisn: formData.get('nisn'),
+      parentPhone: formData.get('parentPhone'),
+      displayName: formData.get('displayName')
+    };
+
+    setUpdatingId(editingMember.id);
+    try {
+      await updateDoc(doc(db, 'users', editingMember.id), updates);
+      setIsEditModalOpen(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${editingMember.id}`);
+      alert("Gagal memperbarui profil siswa.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   if (!profile?.orgId) {
     return (
@@ -189,11 +221,20 @@ export default function Members() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
+          <select 
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none min-w-[140px] shadow-sm"
+          >
+            {classes.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Cari anggota..."
+              placeholder="Cari Nama / NISN..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none w-full sm:min-w-[240px] shadow-sm"
@@ -201,7 +242,7 @@ export default function Members() {
           </div>
           <div className="px-5 py-3 bg-slate-900 text-white rounded-2xl flex items-center gap-3 shadow-lg shadow-slate-200">
             <Users className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-black uppercase tracking-widest">{members.length} Anggota</span>
+            <span className="text-xs font-black uppercase tracking-widest">{filteredMembers.length} Siswa</span>
           </div>
         </div>
       </header>
@@ -214,10 +255,10 @@ export default function Members() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Personal</th>
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Hak Akses</th>
-                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-                  {isAdmin && <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Manajemen</th>}
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Data Siswa</th>
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">NISN & Kelas</th>
+                  <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Jabatan</th>
+                  {(isAdmin || profile?.role === 'treasurer') && <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Opsi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -267,64 +308,61 @@ export default function Members() {
                       </div>
                     </td>
                     <td className="px-8 py-5">
-                      <div className="flex items-center gap-2.5">
-                        <div className={cn(
-                          "w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110",
-                          member.role === 'admin' ? "bg-indigo-50" : 
-                          member.role === 'treasurer' ? "bg-emerald-50" : "bg-slate-50"
-                        )}>
-                          {member.role === 'admin' ? (
-                            <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                          ) : member.role === 'treasurer' ? (
-                            <Shield className="w-4 h-4 text-emerald-600" />
-                          ) : (
-                            <UserCheck className="w-4 h-4 text-slate-400" />
-                          )}
-                        </div>
-                        <span className={cn(
-                          "text-[10px] font-black uppercase tracking-widest",
-                          member.role === 'admin' ? "text-indigo-600" : 
-                          member.role === 'treasurer' ? "text-emerald-600" : "text-slate-500"
-                        )}>
-                          {member.role}
-                        </span>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">{member.className || 'Tanpa Kelas'}</span>
+                        <span className="text-sm font-bold text-slate-700 tracking-tight">{member.nisn || 'NISN: -'}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Online</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border",
+                          member.role === 'admin' ? "bg-indigo-50 text-indigo-600 border-indigo-100" : 
+                          member.role === 'treasurer' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-200"
+                        )}>
+                          {member.role === 'admin' ? 'Kepala Sekolah' : 
+                           member.role === 'treasurer' ? 'Bendahara' : 
+                           member.role === 'teacher' ? 'Wali Kelas' : 'Siswa'}
+                        </span>
                       </div>
                     </td>
-                    {isAdmin && (
+                    {(isAdmin || profile?.role === 'treasurer') && (
                       <td className="px-8 py-5 text-right">
-                        {member.uid === profile?.uid ? (
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200">
-                             <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Akun Anda</span>
-                          </div>
-                        ) : (
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                          {isAdmin && member.uid !== profile.uid && (
                             <select 
                               disabled={updatingId === member.id}
                               value={member.role}
                               onChange={(e) => updateUserRole(member, e.target.value)}
                               className="text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50 appearance-none shadow-sm cursor-pointer"
                             >
-                              <option value="member">Member</option>
-                              <option value="treasurer">Treasurer</option>
-                              <option value="admin">Admin</option>
+                              <option value="member">Siswa</option>
+                              <option value="teacher">Wali Kelas</option>
+                              <option value="treasurer">Bendahara</option>
+                              <option value="admin">Kepala Sekolah</option>
                             </select>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            disabled={updatingId === member.id}
+                            onClick={() => { setEditingMember(member); setIsEditModalOpen(true); }}
+                            className="rounded-xl bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 h-10 px-4"
+                          >
+                            Edit
+                          </Button>
+                          {isAdmin && member.uid !== profile.uid && (
                             <Button 
                               variant="ghost" 
                               size="sm"
                               disabled={updatingId === member.id}
                               onClick={() => removeMember(member)}
-                              className="rounded-xl bg-orange-50 text-orange-600 border border-orange-100 hover:bg-orange-100 w-10 h-10 p-0 flex items-center justify-center transition-colors"
+                              className="rounded-xl bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 w-10 h-10 p-0"
                             >
                               <UserMinus className="w-4 h-4" />
                             </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -452,6 +490,42 @@ export default function Members() {
            </div>
         </Card>
       </div>
+
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="z-[110] bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl relative border border-slate-200">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Edit Profil Siswa</h2>
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Nama Lengkap</label>
+                  <input name="displayName" defaultValue={editingMember?.displayName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Kelas</label>
+                    <input name="className" defaultValue={editingMember?.className} placeholder="Contoh: 7A" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold text-center" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">NISN</label>
+                    <input name="nisn" defaultValue={editingMember?.nisn} placeholder="10 Digit" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold text-center" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">WA Orang Tua (PII)</label>
+                  <input name="parentPhone" defaultValue={editingMember?.parentPhone} placeholder="08..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                </div>
+                
+                <div className="pt-4 flex gap-3">
+                  <Button type="button" variant="ghost" className="flex-1" onClick={() => setIsEditModalOpen(false)}>Batal</Button>
+                  <Button type="submit" variant="brand" className="flex-1" isLoading={updatingId === editingMember?.id}>Simpan</Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <ConfirmModal 
         isOpen={confirmModal.isOpen}

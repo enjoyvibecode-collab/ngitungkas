@@ -50,12 +50,12 @@ export default function Landing() {
             <span>Transparansi Digital V2.0</span>
           </div>
           <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9]">
-            Ngitung KAS <br/>
-            <span className="text-slate-300">Tanpa Ribet.</span>
+            NgitungKas Edu <br/>
+            <span className="text-slate-300">SMPN 1 Manonjaya.</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
-            Sistem akuntansi ledger-based untuk organisasi modern. <br className="hidden md:block"/>
-            Pantau saldo, iuran, dan tabungan dengan satu klik.
+            Sistem Tabungan & Iuran Digital untuk SMP Negeri 1 Manonjaya. <br className="hidden md:block"/>
+            Transparansi keuangan sekolah dalam satu genggaman.
           </p>
         </motion.div>
 
@@ -112,7 +112,7 @@ export default function Landing() {
                 <span>Terms</span>
                 <span>Audit Log</span>
              </div>
-             <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">&copy; 2026 Ngitung KAS Platform. Powered by LedgerCoreX.</p>
+             <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">&copy; 2026 NgitungKas Edu Platform. Dedicated for SMP Negeri 1 Manonjaya.</p>
           </div>
         </footer>
       </div>

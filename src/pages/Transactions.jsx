@@ -108,9 +108,9 @@ export default function Transactions() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Arsip Kas</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Arsip Kas Sekolah</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Riwayat Ledger • {filteredTransactions.length} Rekaman
+            Riwayat Digital • SMP Negeri 1 Manonjaya
           </p>
         </div>
         
