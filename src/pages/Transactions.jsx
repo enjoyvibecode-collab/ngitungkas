@@ -13,6 +13,7 @@ import {
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -35,6 +36,8 @@ export default function Transactions() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTransactions(txs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/transactions`);
     });
 
     return () => unsubscribe();
@@ -54,7 +57,7 @@ export default function Transactions() {
         updatedBy: profile.uid
       });
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `organizations/${profile.orgId}/transactions/${id}`);
     }
   };
 
@@ -215,7 +218,7 @@ export default function Transactions() {
                    await addDoc(collection(db, 'organizations', profile.orgId, 'transactions'), data);
                    setIsModalOpen(false);
                 } catch (err) {
-                  console.error(err);
+                  handleFirestoreError(err, OperationType.CREATE, `organizations/${profile.orgId}/transactions`);
                 } finally {
                   setIsLoading(false);
                 }

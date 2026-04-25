@@ -13,7 +13,9 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isVerified() { 
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com'); 
+    }
     
     // Relational Helpers
     function getProfile() {
@@ -36,7 +38,7 @@ service cloud.firestore {
                data.displayName is string && data.displayName.size() <= 100 &&
                data.email == request.auth.token.email &&
                data.role in ['admin', 'treasurer', 'member'] &&
-               data.orgId is string && data.orgId.size() <= 50;
+               (data.orgId == null || (data.orgId is string && data.orgId.size() <= 50));
       }
 
       allow get: if isSignedIn() && (request.auth.uid == userId || isOrgAdmin(existing().orgId));
@@ -44,9 +46,12 @@ service cloud.firestore {
       
       allow create: if isVerified() && request.auth.uid == userId && isValidUser(incoming());
       allow update: if isVerified() && request.auth.uid == userId && 
-                       isValidUser(incoming()) &&
-                       incoming().role == existing().role && // Users cannot change their own roles
-                       incoming().orgId == existing().orgId;
+                       isValidUser(incoming()) && (
+                         // Normal updates (role & orgId are immutable)
+                         (incoming().role == existing().role && incoming().orgId == existing().orgId) ||
+                         // First-time setup: Allow setting orgId and role to admin if currently null
+                         (existing().orgId == null && incoming().role == 'admin' && incoming().orgId != null)
+                       );
     }
 
     // 2. Organization subcollections

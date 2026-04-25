@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 export default function Savings() {
   const { profile } = useAuth();
@@ -36,6 +37,8 @@ export default function Savings() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const stats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSavings(stats);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/savings`);
     });
 
     // Listen to organization members
@@ -46,6 +49,8 @@ export default function Savings() {
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
       const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setMembers(users);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users`);
     });
 
     return () => {
@@ -114,7 +119,7 @@ export default function Savings() {
       await batch.commit();
       setIsModalOpen(false);
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.WRITE, `organizations/${profile.orgId}/savings batch`);
       alert("Gagal memproses transaksi: " + err.message);
     } finally {
       setIsLoading(false);
@@ -299,6 +304,8 @@ function SavingsLogList({ orgId }) {
     );
     return onSnapshot(q, (snap) => {
       setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `organizations/${orgId}/savings_logs`);
     });
   }, [orgId]);
 

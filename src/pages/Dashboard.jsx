@@ -8,9 +8,11 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react';
-import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
+import { Button } from '../components/Common';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { 
   AreaChart,
@@ -74,6 +76,8 @@ export default function Dashboard() {
 
       const sorted = [...txs].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
       setRecentTransactions(sorted.slice(0, 5));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/transactions`);
     });
 
     // Listen to members
@@ -83,6 +87,8 @@ export default function Dashboard() {
     );
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
       setStats(prev => ({ ...prev, members: snapshot.size }));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users`);
     });
 
     return () => {
@@ -91,14 +97,51 @@ export default function Dashboard() {
     };
   }, [profile]);
 
+  const handleCreateOrg = async (e) => {
+    e.preventDefault();
+    const orgName = e.target.orgName.value.trim();
+    if (!orgName) return;
+
+    try {
+      const userRef = doc(db, 'users', profile.uid);
+      // Slugify simple org name + random string
+      const slug = orgName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+      
+      await updateDoc(userRef, {
+        orgId: slug,
+        role: 'admin'
+      });
+      // Profile will auto-update via AuthContext listener
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      alert("Gagal membuat organisasi: " + err.message);
+    }
+  };
+
   if (!profile?.orgId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
         <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center mb-6">
           <Users className="w-10 h-10" />
         </div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Belum Tergabung Organisasi</h2>
-        <p className="text-slate-500 max-w-sm mb-8">Silahkan hubungi admin organisasi Anda atau minta untuk didaftarkan ke grup.</p>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Pendaftaran Admin Baru</h2>
+        <p className="text-slate-500 max-w-sm mb-8">Anda terdeteksi sebagai pengguna baru. Silahkan buat organisasi Bapak/Ibu untuk mulai mengelola KAS secara digital.</p>
+        
+        <form onSubmit={handleCreateOrg} className="w-full max-w-md space-y-4">
+          <input 
+            name="orgName" 
+            type="text" 
+            required 
+            placeholder="Nama Organisasi (misal: Karang Taruna RW 05)"
+            className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
+          />
+          <Button type="submit" variant="brand" className="w-full py-4 rounded-2xl">
+            Buat & Masuk Dashboard
+          </Button>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-4">
+            Akses Admin akan diberikan secara otomatis kepada Bapak/Ibu.
+          </p>
+        </form>
       </div>
     );
   }

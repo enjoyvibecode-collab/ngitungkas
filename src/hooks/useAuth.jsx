@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
 
 const AuthContext = createContext(undefined);
 
@@ -15,28 +16,33 @@ export function AuthProvider({ children }) {
       setUser(user);
       if (user) {
         const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setProfile(data);
-        } else {
-          const newProfile = {
-            uid: user.uid,
-            displayName: user.displayName || 'User',
-            email: user.email || '',
-            photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
-            role: 'member',
-            orgId: null, // User must join/create an org
-            createdAt: serverTimestamp(),
-          };
-          await setDoc(docRef, newProfile);
-          setProfile(newProfile);
-        }
+        const unsubProfile = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setProfile(docSnap.data());
+          } else {
+            const newProfile = {
+              uid: user.uid,
+              displayName: user.displayName || 'User',
+              email: user.email || '',
+              photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
+              role: 'member',
+              orgId: null,
+              createdAt: serverTimestamp(),
+            };
+            setDoc(docRef, newProfile).catch(console.error);
+            setProfile(newProfile);
+          }
+          setLoading(false);
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          setLoading(false);
+        });
+
+        return () => unsubProfile();
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
