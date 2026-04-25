@@ -26,6 +26,7 @@ export default function Savings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [modalType, setModalType] = useState('deposit'); // 'deposit' or 'withdraw'
+  const [error, setError] = useState(null);
   
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -37,35 +38,50 @@ export default function Savings() {
   useEffect(() => {
     if (!profile?.orgId) return;
 
-    // Listen to current balances
-    const q = query(
-      collection(db, 'organizations', profile.orgId, 'savings'),
-      orderBy('balance', 'desc')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const stats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSavings(stats);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/savings`);
-    });
+    try {
+      // Listen to current balances
+      const q = query(
+        collection(db, 'organizations', profile.orgId, 'savings'),
+        orderBy('balance', 'desc')
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const stats = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          balance: Number(doc.data().balance) || 0 
+        }));
+        setSavings(stats);
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, `organizations/${profile.orgId}/savings`);
+        setError("Gagal memuat data saldo tabungan.");
+      });
 
-    // Listen to organization members
-    const qMembers = query(
-      collection(db, 'users'),
-      where('orgId', '==', profile.orgId)
-    );
-    const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
-      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMembers(users);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users`);
-    });
+      // Listen to organization members
+      const qMembers = query(
+        collection(db, 'users'),
+        where('orgId', '==', profile.orgId)
+      );
+      const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
+        const users = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          uid: doc.id, // Ensure uid exists for older logic
+          ...doc.data() 
+        }));
+        setMembers(users);
+      }, (err) => {
+        handleFirestoreError(err, OperationType.LIST, `users`);
+        setError("Gagal memuat data anggota.");
+      });
 
-    return () => {
-      unsubscribe();
-      unsubscribeMembers();
-    };
-  }, [profile]);
+      return () => {
+        unsubscribe();
+        unsubscribeMembers();
+      };
+    } catch (err) {
+      console.error("Setup error in Savings:", err);
+      setError("Terjadi kesalahan sistem saat inisialisasi.");
+    }
+  }, [profile?.orgId]);
 
   const handleTransaction = async (e) => {
     e.preventDefault();
@@ -149,6 +165,19 @@ export default function Savings() {
     }
   };
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
+        <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mb-6">
+          <X className="w-8 h-8" />
+        </div>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Terjadi Masalah</h2>
+        <p className="text-slate-500 max-w-sm mb-6">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="brand" size="sm">Coba Lagi</Button>
+      </div>
+    );
+  }
+
   if (!profile?.orgId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 bg-white rounded-[3rem] border border-slate-200">
@@ -176,7 +205,9 @@ export default function Savings() {
         <Card variant="dark" className="col-span-12 lg:col-span-5 relative overflow-hidden group">
           <div className="relative z-10">
             <p className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Total Tabungan</p>
-            <p className="text-4xl font-black tracking-tight">{formatCurrency(savings.reduce((acc, s) => acc + s.balance, 0))}</p>
+            <p className="text-4xl font-black tracking-tight">
+              {formatCurrency(savings.reduce((acc, s) => acc + (s.balance || 0), 0))}
+            </p>
             <div className="mt-6 flex items-center text-[10px] text-emerald-400 font-black uppercase tracking-wider bg-white/5 py-2 px-3 rounded-xl border border-white/10 w-fit">
               <ArrowUpCircle className="w-3 h-3 mr-1.5" />
               Anggota Aktif: {savings.length}
@@ -287,7 +318,7 @@ export default function Savings() {
                   <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
                     <option value="">-- Pilih Nama --</option>
                     {members.map(m => (
-                      <option key={m.uid} value={m.uid}>{m.displayName}</option>
+                      <option key={m.id} value={m.id}>{m.displayName || m.email}</option>
                     ))}
                   </select>
                 </div>
@@ -336,7 +367,11 @@ function SavingsLogList({ orgId }) {
       limit(5)
     );
     return onSnapshot(q, (snap) => {
-      setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLogs(snap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        amount: Number(doc.data().amount) || 0
+      })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `organizations/${orgId}/savings_logs`);
     });
