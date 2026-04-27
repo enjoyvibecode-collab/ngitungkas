@@ -97,7 +97,7 @@ export default function Members() {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
         if (jsonData.length === 0) {
           alert("File Excel kosong atau format tidak sesuai.");
@@ -105,42 +105,63 @@ export default function Members() {
           return;
         }
 
+        // Helper to find column by multiple possible header names
+        const findValue = (row, possibleHeaders) => {
+          const keys = Object.keys(row);
+          for (const header of possibleHeaders) {
+            const match = keys.find(k => k.trim().toLowerCase() === header.toLowerCase());
+            if (match) return row[match];
+          }
+          return null;
+        };
+
         // Confirmation
-        if (!window.confirm(`Sistem mendeteksi ${jsonData.length} data siswa. Lanjutkan impor ke database sekolah?`)) {
+        if (!window.confirm(`Sistem mendeteksi ${jsonData.length} baris data. Lanjutkan impor ke database sekolah?`)) {
           setIsImporting(false);
           return;
         }
 
-        const batchSize = 400; // Firestore batch limit is 500
         let successCount = 0;
+        let failCount = 0;
+        const failures = [];
+        const batchSize = 400;
         
-        // Process in chunks
+        // Process in chunks to respect Firestore limits
         for (let i = 0; i < jsonData.length; i += batchSize) {
           const chunk = jsonData.slice(i, i + batchSize);
           const batch = writeBatch(db);
+          let batchCount = 0;
 
-          for (const row of chunk) {
-            const displayName = row["Nama Lengkap"];
-            const nisn = String(row["NISN"] || "");
-            const email = row["Email"];
-            const className = row["Kelas"];
-            const phone = String(row["WA Siswa"] || "");
-            const parentPhone = String(row["WA Orang Tua"] || "");
+          for (let j = 0; j < chunk.length; j++) {
+            const row = chunk[j];
+            const rowIndex = i + j + 2; // +2 for header row and 1-based index
 
-            if (!displayName) continue;
+            // Flexible header matching
+            const displayName = findValue(row, ["Nama Lengkap", "Nama", "Full Name", "Name"])?.toString().trim();
+            const nisn = findValue(row, ["NISN", "ID Siswa", "Student ID"])?.toString().trim();
+            const email = findValue(row, ["Email", "Surel"])?.toString().trim();
+            const className = findValue(row, ["Kelas", "Class"])?.toString().trim();
+            const phone = findValue(row, ["WA Siswa", "WhatsApp Siswa", "No HP", "Phone"])?.toString().trim();
+            const parentPhone = findValue(row, ["WA Orang Tua", "WhatsApp Orang Tua", "WA Ortu", "Parent Phone"])?.toString().trim();
 
-            // Generate a placeholder ID if no email provided, otherwise use a hash or just random
-            // Unique ID per org + NISN to prevent duplicates
+            // Validation: Name is mandatory
+            if (!displayName) {
+              failCount++;
+              failures.push(`Baris ${rowIndex}: Nama Lengkap kosong`);
+              continue;
+            }
+
+            // Generate deterministic ID or random if no NISN
             const docId = `imported_${profile.orgId}_${nisn || Math.random().toString(36).substring(7)}`;
             const userRef = doc(db, 'users', docId);
 
             batch.set(userRef, {
               displayName,
-              nisn,
+              nisn: nisn || "",
               email: email || `${nisn || Math.random().toString(36).substring(7)}@no-email.edu`,
-              className: String(className || ""),
-              phone: phone,
-              parentPhone: parentPhone,
+              className: className || "",
+              phone: phone || "",
+              parentPhone: parentPhone || "",
               orgId: profile.orgId,
               role: 'member',
               isImported: true,
@@ -148,18 +169,34 @@ export default function Members() {
             }, { merge: true });
             
             successCount++;
+            batchCount++;
           }
 
-          await batch.commit();
+          if (batchCount > 0) {
+            await batch.commit();
+          }
         }
 
-        alert(`Berhasil mengimpor ${successCount} siswa ke dalam sistem!`);
+        // Final Report
+        let report = `Impor Selesai!\n`;
+        report += `-------------------\n`;
+        report += `Total Baris: ${jsonData.length}\n`;
+        report += `Berhasil: ${successCount}\n`;
+        report += `Gagal: ${failCount}\n`;
+        
+        if (failures.length > 0) {
+          report += `\nDetail Kegagalan (10 pertama):\n`;
+          report += failures.slice(0, 10).join('\n');
+          if (failures.length > 10) report += `\n...dan ${failures.length - 10} lainnya`;
+        }
+
+        alert(report);
       } catch (err) {
         console.error("Import error:", err);
-        alert("Terjadi kesalahan saat memproses file Excel. Pastikan format kolom sesuai dengan template.");
+        alert("Terjadi kesalahan sistem saat memproses file Excel. Pastikan file tidak diproteksi password.");
       } finally {
         setIsImporting(false);
-        e.target.value = ""; // clear input
+        e.target.value = ""; 
       }
     };
 
