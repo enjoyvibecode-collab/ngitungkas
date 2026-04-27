@@ -166,7 +166,7 @@ export default function Contributions() {
     doc.text('Laporan Keuangan Iuran Rutin', 14, 22);
     doc.setFontSize(11);
     doc.text(`Periode: ${months[currentMonth]} ${currentYear}`, 14, 30);
-    doc.text(`Organisasi: ${profile?.orgId?.replace('-', ' ').toUpperCase()}`, 14, 37);
+    doc.text(`Organisasi: ${(profile?.orgId || 'N/A').replace('-', ' ').toUpperCase()}`, 14, 37);
 
     // Summary
     const summaryData = [

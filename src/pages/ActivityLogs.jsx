@@ -190,7 +190,7 @@ export default function ActivityLogs() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{log.actorName}</span>
                       <span className="w-1 h-1 rounded-full bg-slate-300" />
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{log.action.replace('_', ' ')}</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(log?.action || 'Aktivitas').replace('_', ' ')}</span>
                     </div>
                     
                     <h4 className="text-sm md:text-base font-black text-slate-900 leading-snug">

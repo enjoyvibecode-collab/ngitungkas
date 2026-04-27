@@ -80,7 +80,8 @@ export default function Members() {
     ];
     ws['!cols'] = wscols;
 
-    XLSX.writeFile(wb, `Format_Impor_Siswa_${profile.orgName.replace(/\s+/g, '_')}.xlsx`);
+    const safeOrgName = (profile?.orgName || 'Sekolah').replace(/\s+/g, '_');
+    XLSX.writeFile(wb, `Format_Impor_Siswa_${safeOrgName}.xlsx`);
   };
 
   const handleImportExcel = async (e) => {
