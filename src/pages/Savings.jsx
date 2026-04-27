@@ -31,6 +31,10 @@ export default function Savings() {
   const [selectedClass, setSelectedClass] = useState('Semua Kelas');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Modal advanced filtering states
+  const [modalClassFilter, setModalClassFilter] = useState('Semua Kelas');
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+  
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -397,14 +401,59 @@ export default function Savings() {
               </h2>
               
               <form onSubmit={handleTransaction} className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Siswa</label>
-                  <div className="relative">
-                    <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
-                      <option value="">-- Pilih Nama --</option>
-                      {(members || []).map(m => (
-                        <option key={m?.id} value={m?.id}>{m?.displayName || m?.email || 'User'} ({m?.className || '?'})</option>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Filter Kelas</label>
+                    <select 
+                      value={modalClassFilter}
+                      onChange={(e) => setModalClassFilter(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-xs"
+                    >
+                      {classes.map(c => (
+                        <option key={c} value={c}>{c}</option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="col-span-1">
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Cari Nama/NISN</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                      <input 
+                        type="text"
+                        value={modalSearchTerm}
+                        onChange={(e) => setModalSearchTerm(e.target.value)}
+                        placeholder="Cepat..."
+                        className="w-full pl-9 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Siswa ({
+                    members.filter(m => {
+                      const matchesClass = modalClassFilter === 'Semua Kelas' || m.className === modalClassFilter;
+                      const matchesSearch = (m.displayName || '').toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
+                                           (m.nisn || '').includes(modalSearchTerm);
+                      return matchesClass && matchesSearch;
+                    }).length
+                  } Hasil)</label>
+                  <div className="relative">
+                    <select name="userId" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none text-sm">
+                      <option value="">-- Hasil Pencarian --</option>
+                      {members
+                        .filter(m => {
+                          const matchesClass = modalClassFilter === 'Semua Kelas' || m.className === modalClassFilter;
+                          const matchesSearch = (m.displayName || '').toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
+                                               (m.nisn || '').includes(modalSearchTerm);
+                          return matchesClass && matchesSearch;
+                        })
+                        .sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''))
+                        .map(m => (
+                          <option key={m?.id} value={m?.id}>
+                            {m?.displayName} - {m?.className || '?'} - {m?.nisn || '-'}
+                          </option>
+                        ))}
                     </select>
                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
                       <ArrowDownCircle className="w-4 h-4 text-slate-400" />
