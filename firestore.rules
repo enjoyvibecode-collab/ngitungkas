@@ -66,7 +66,12 @@ service cloud.firestore {
       allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
       allow list: if isSignedIn() && (request.query.limit > 0); 
       
-      allow create: if isSignedIn() && request.auth.uid == userId && isValidUserSchema(incoming()) && incoming().uid == userId;
+      allow create: if isSignedIn() && (
+        // Case 1: Self-registration
+        (request.auth.uid == userId && isValidUserSchema(incoming()) && incoming().uid == userId) ||
+        // Case 2: Administrative creation (e.g. Bulk Import)
+        (isFinanceRole(incoming().orgId) && incoming().role == 'member' && isValidUserSchema(incoming()))
+      );
       
       allow update: if isSignedIn() && isValidUserSchema(incoming()) && (
         // Case 1: User updating their own profile

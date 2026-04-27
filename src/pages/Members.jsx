@@ -9,8 +9,12 @@ import {
   UserCheck,
   Search,
   MoreVertical,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { 
   collection, 
   query, 
@@ -20,7 +24,9 @@ import {
   updateDoc,
   addDoc,
   serverTimestamp,
-  writeBatch
+  writeBatch,
+  getDocs,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
@@ -37,6 +43,127 @@ export default function Members() {
   const [selectedClass, setSelectedClass] = useState('Semua Kelas');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [isImporting, setIsImporting] = useState(false);
+  
+  const downloadTemplate = () => {
+    const templateData = [
+      {
+        "Nama Lengkap": "Ahmad Riza",
+        "NISN": "0012345678",
+        "Email": "ahmad.riza@example.com",
+        "Kelas": "7A",
+        "WA Siswa": "6281234567890",
+        "WA Orang Tua": "6289876543210"
+      },
+      {
+        "Nama Lengkap": "Siti Aminah",
+        "NISN": "0098765432",
+        "Email": "siti.aminah@example.com",
+        "Kelas": "7A",
+        "WA Siswa": "628111222333",
+        "WA Orang Tua": "628555444333"
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Format Impor Siswa");
+    
+    // Set column widths
+    const wscols = [
+      {wch: 30}, // Nama
+      {wch: 15}, // NISN
+      {wch: 30}, // Email
+      {wch: 10}, // Kelas
+      {wch: 20}, // WA Siswa
+      {wch: 20}  // WA Ortu
+    ];
+    ws['!cols'] = wscols;
+
+    XLSX.writeFile(wb, `Format_Impor_Siswa_${profile.orgName.replace(/\s+/g, '_')}.xlsx`);
+  };
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          alert("File Excel kosong atau format tidak sesuai.");
+          setIsImporting(false);
+          return;
+        }
+
+        // Confirmation
+        if (!window.confirm(`Sistem mendeteksi ${jsonData.length} data siswa. Lanjutkan impor ke database sekolah?`)) {
+          setIsImporting(false);
+          return;
+        }
+
+        const batchSize = 400; // Firestore batch limit is 500
+        let successCount = 0;
+        
+        // Process in chunks
+        for (let i = 0; i < jsonData.length; i += batchSize) {
+          const chunk = jsonData.slice(i, i + batchSize);
+          const batch = writeBatch(db);
+
+          for (const row of chunk) {
+            const displayName = row["Nama Lengkap"];
+            const nisn = String(row["NISN"] || "");
+            const email = row["Email"];
+            const className = row["Kelas"];
+            const phone = String(row["WA Siswa"] || "");
+            const parentPhone = String(row["WA Orang Tua"] || "");
+
+            if (!displayName) continue;
+
+            // Generate a placeholder ID if no email provided, otherwise use a hash or just random
+            // Unique ID per org + NISN to prevent duplicates
+            const docId = `imported_${profile.orgId}_${nisn || Math.random().toString(36).substring(7)}`;
+            const userRef = doc(db, 'users', docId);
+
+            batch.set(userRef, {
+              displayName,
+              nisn,
+              email: email || `${nisn || Math.random().toString(36).substring(7)}@no-email.edu`,
+              className: String(className || ""),
+              phone: phone,
+              parentPhone: parentPhone,
+              orgId: profile.orgId,
+              role: 'member',
+              isImported: true,
+              createdAt: serverTimestamp()
+            }, { merge: true });
+            
+            successCount++;
+          }
+
+          await batch.commit();
+        }
+
+        alert(`Berhasil mengimpor ${successCount} siswa ke dalam sistem!`);
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("Terjadi kesalahan saat memproses file Excel. Pastikan format kolom sesuai dengan template.");
+      } finally {
+        setIsImporting(false);
+        e.target.value = ""; // clear input
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({
@@ -237,6 +364,38 @@ export default function Members() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
+          {(isAdmin || profile?.role === 'treasurer') && (
+            <div className="flex gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={downloadTemplate}
+                className="rounded-2xl border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm whitespace-nowrap h-full px-4"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Unduh Format</span>
+              </Button>
+              <div className="relative">
+                <input 
+                  type="file" 
+                  accept=".xlsx, .xls" 
+                  onChange={handleImportExcel} 
+                  className="absolute inset-0 opacity-0 cursor-pointer" 
+                  title="Impor Excel" 
+                  disabled={isImporting}
+                />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  isLoading={isImporting}
+                  className="rounded-2xl border-indigo-100 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm whitespace-nowrap h-full px-4 w-full"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Impor Excel</span>
+                </Button>
+              </div>
+            </div>
+          )}
           <select 
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
