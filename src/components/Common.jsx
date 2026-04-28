@@ -72,3 +72,23 @@ export function Button(props) {
     </button>
   );
 }
+
+export function Badge({ children, variant = 'secondary', className }) {
+  const variants = {
+    success: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    danger: 'bg-rose-50 text-rose-600 border-rose-100',
+    warning: 'bg-amber-50 text-amber-600 border-amber-100',
+    secondary: 'bg-slate-100 text-slate-500 border-slate-200',
+    brand: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+  };
+
+  return (
+    <span className={cn(
+      "px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border",
+      variants[variant],
+      className
+    )}>
+      {children}
+    </span>
+  );
+}

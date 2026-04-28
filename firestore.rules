@@ -164,6 +164,25 @@ service cloud.firestore {
         allow read: if isOrgMember(orgId);
         allow write: if isFinanceRole(orgId);
       }
+
+      // Billing Types (Master Tagihan)
+      match /billing_types/{billId} {
+        allow read: if isOrgMember(orgId);
+        allow write: if isFinanceRole(orgId) && isValidId(billId);
+      }
+
+      // Student Bills (Individual Tagihan per Siswa)
+      match /student_bills/{docId} {
+        allow read: if isOrgMember(orgId) && (resource == null || request.auth.uid == resource.data.studentId || isAdministrativeRole(orgId));
+        allow list: if isOrgMember(orgId);
+        allow write: if isFinanceRole(orgId);
+      }
+
+      // Payment Logs (Riwayat Pembayaran Tagihan)
+      match /payment_logs/{logId} {
+        allow read: if isOrgMember(orgId);
+        allow create: if isFinanceRole(orgId) && isValidId(logId);
+      }
     }
   }
 }

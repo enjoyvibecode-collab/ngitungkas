@@ -379,7 +379,7 @@ export default function Dashboard() {
           subtitle="Siswa Belum Iuran Bulan Ini"
           className="col-span-12 lg:col-span-6"
           action={
-            <Link to="/contributions" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
+            <Link to="/billing" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
               Lihat Detail
             </Link>
           }
