@@ -25,12 +25,14 @@ export function Navbar() {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Arsip Kas', path: '/transactions', icon: Receipt },
+    { name: 'Kas Kelas', path: '/transactions', icon: Receipt },
     { name: 'Tagihan Sekolah', path: '/billing', icon: CreditCard },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
-    ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher' ? [
-      { name: 'Siswa', path: '/members', icon: Users },
-      { name: 'Aktivitas', path: '/activity', icon: History }
+    ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'class_treasurer' ? [
+      { name: 'Data Siswa & Kelas', path: '/members', icon: Users },
+    ] : []),
+    ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' ? [
+      { name: 'Log Aktivitas', path: '/activity', icon: History }
     ] : []),
   ];
 
@@ -82,8 +84,9 @@ export function Navbar() {
                 <div className="flex items-center justify-end gap-1.5 mt-1">
                   <p className="text-[9px] text-indigo-600 font-black uppercase tracking-widest leading-none bg-indigo-50 px-1.5 py-0.5 rounded-full">
                     {profile?.role === 'admin' ? 'Kepala Sekolah' : 
-                     profile?.role === 'treasurer' ? 'Bendahara' : 
-                     profile?.role === 'teacher' ? 'Wali Kelas' : 'Siswa'}
+                     profile?.role === 'treasurer' ? 'Bendahara Sekolah' : 
+                     profile?.role === 'staff' ? `TU Tingkat ${profile?.assignedGrade || ''}` :
+                     profile?.role === 'class_treasurer' ? `Bendahara Kelas ${profile?.className || ''}` : 'Siswa'}
                   </p>
                   {profile?.orgId && (
                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none border border-slate-200 px-1.5 py-0.5 rounded-full">

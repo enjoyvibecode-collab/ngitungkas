@@ -80,6 +80,8 @@ export function Badge({ children, variant = 'secondary', className }) {
     warning: 'bg-amber-50 text-amber-600 border-amber-100',
     secondary: 'bg-slate-100 text-slate-500 border-slate-200',
     brand: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    staff: 'bg-purple-50 text-purple-600 border-purple-100', // For TU
+    class: 'bg-sky-50 text-sky-600 border-sky-100', // For Bendahara Kelas
   };
 
   return (

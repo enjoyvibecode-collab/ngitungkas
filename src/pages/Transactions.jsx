@@ -248,6 +248,7 @@ export default function Transactions() {
                   amount,
                   type: formData.get('type'),
                   category: formData.get('category'),
+                  className: formData.get('className') || 'Global',
                   description,
                   date: serverTimestamp(),
                   createdBy: profile?.uid,
@@ -286,6 +287,15 @@ export default function Transactions() {
                   <select name="type" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
                     <option value="income">Pemasukan (+)</option>
                     <option value="expense">Pengeluaran (-)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Target Kas Kelas</label>
+                  <select name="className" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
+                    <option value="Global">Kas Umum / Sekolah</option>
+                    {['7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K'].map(c => (
+                      <option key={c} value={c}>Kelas {c}</option>
+                    ))}
                   </select>
                 </div>
                 <div>

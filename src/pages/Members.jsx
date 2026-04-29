@@ -43,6 +43,7 @@ export default function Members() {
   const [selectedClass, setSelectedClass] = useState('Semua Kelas');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [editingRole, setEditingRole] = useState('member');
   const [isImporting, setIsImporting] = useState(false);
   
   const downloadTemplate = () => {
@@ -355,38 +356,49 @@ export default function Members() {
     return matchesSearch && matchesClass;
   });
 
-  const handleUpdateProfile = async (e) => {
+  const handleSaveMember = async (e) => {
     e.preventDefault();
-    if (!editingMember) return;
-    
     const formData = new FormData(e.currentTarget);
     const updates = {
       className: formData.get('className') || null,
       nisn: formData.get('nisn') || null,
       parentPhone: formData.get('parentPhone') || null,
       phone: formData.get('phone') || null,
-      displayName: formData.get('displayName')
+      displayName: formData.get('displayName'),
+      role: formData.get('role'),
+      assignedGrade: formData.get('assignedGrade') || null,
+      email: formData.get('email')
     };
 
-    // Form Validation (Defensive)
-    if (updates.nisn && updates.nisn.length > 30) return alert("NISN maksimal 30 karakter");
-    if (updates.className && updates.className.length > 20) return alert("Kelas maksimal 20 karakter");
-    if (updates.phone && updates.phone.length > 20) return alert("No. WA maksimal 20 karakter");
-    if (updates.parentPhone && updates.parentPhone.length > 20) return alert("WA Ortu maksimal 20 karakter");
+    // Form Validation
+    if (!updates.displayName || !updates.email) {
+      return alert("Nama Lengkap dan Email wajib diisi!");
+    }
 
-    setUpdatingId(editingMember.id);
+    setUpdatingId(editingMember?.id || 'new');
     try {
-      await updateDoc(doc(db, 'users', editingMember.id), updates);
-      setIsEditModalOpen(false);
-      // Optional: show a success toast if available, otherwise alert is fine
-    } catch (err) {
-      console.error("Update failed:", err);
-      if (err.code === 'permission-denied') {
-        alert("Akses Ditolak: Bapak/Ibu tidak memiliki wewenang untuk mengubah data siswa ini atau format data tidak valid.");
+      if (editingMember) {
+        // Update Existing
+        await updateDoc(doc(db, 'users', editingMember.id), updates);
       } else {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${editingMember.id}`);
-        alert("Terjadi kesalahan sistem saat menyimpan data.");
+        // Create New
+        // Use a deterministic ID based on Org and Email to avoid duplicates before auth
+        const docId = `manual_${profile.orgId}_${updates.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        await setDoc(doc(db, 'users', docId), {
+          ...updates,
+          orgId: profile.orgId,
+          orgName: profile.orgName,
+          savingsBalance: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          isManualCreated: true
+        }, { merge: true });
+        alert("Akun berhasil didaftarkan. Staf bisa login menggunakan email tersebut.");
       }
+      setIsEditModalOpen(false);
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Gagal menyimpan data: " + err.message);
     } finally {
       setUpdatingId(null);
     }
@@ -413,6 +425,19 @@ export default function Members() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
+          {isAdmin && (
+            <Button 
+              className="rounded-2xl shadow-lg shadow-indigo-200 h-full px-6"
+              onClick={() => {
+                setEditingMember(null);
+                setEditingRole('member');
+                setIsEditModalOpen(true);
+              }}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Akun Baru</span>
+            </Button>
+          )}
           {(isAdmin || profile?.role === 'treasurer') && (
             <div className="flex gap-2">
               <Button 
@@ -541,54 +566,30 @@ export default function Members() {
                       <div className="flex items-center gap-2.5">
                         <span className={cn(
                           "text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border",
-                          member.role === 'admin' ? "bg-indigo-50 text-indigo-600 border-indigo-100" : 
-                          member.role === 'treasurer' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-500 border-slate-200"
+                          member.role === 'admin' ? "bg-rose-50 text-rose-600 border-rose-100" : 
+                          member.role === 'treasurer' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : 
+                          member.role === 'staff' ? "bg-purple-50 text-purple-600 border-purple-100" :
+                          member.role === 'class_treasurer' ? "bg-sky-50 text-sky-600 border-sky-100" :
+                          "bg-slate-50 text-slate-500 border-slate-200"
                         )}>
                           {member.role === 'admin' ? 'Kepala Sekolah' : 
-                           member.role === 'treasurer' ? 'Bendahara' : 
-                           member.role === 'teacher' ? 'Wali Kelas' : 'Siswa'}
+                           member.role === 'treasurer' ? 'Bendahara Sekolah' : 
+                           member.role === 'staff' ? `TU Tingkat ${member.assignedGrade || ''}` :
+                           member.role === 'class_treasurer' ? `Bendahara Kelas ${member.className || ''}` : 'Siswa'}
                         </span>
                       </div>
                     </td>
                     {(isAdmin || profile?.role === 'treasurer') && (
                       <td className="px-8 py-5 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-                          {isAdmin && member.uid !== profile.uid && (
-                            <div className="flex items-center gap-1">
-                              <select 
-                                disabled={updatingId === member.id}
-                                defaultValue={member.role}
-                                id={`role-select-${member.id}`}
-                                className="text-[10px] font-black uppercase tracking-widest bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50 appearance-none shadow-sm cursor-pointer"
-                              >
-                                <option value="member">Siswa</option>
-                                <option value="teacher">Wali Kelas</option>
-                                <option value="treasurer">Bendahara</option>
-                                <option value="admin">Kepala Sekolah</option>
-                              </select>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                disabled={updatingId === member.id}
-                                onClick={() => {
-                                  const select = document.getElementById(`role-select-${member.id}`);
-                                  updateUserRole(member, select.value);
-                                }}
-                                className="rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 w-10 h-10 p-0"
-                                title="Simpan Peran"
-                              >
-                                <ShieldCheck className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          )}
                           <Button 
                             variant="ghost" 
                             size="sm"
                             disabled={updatingId === member.id}
-                            onClick={() => { setEditingMember(member); setIsEditModalOpen(true); }}
+                            onClick={() => { setEditingMember(member); setEditingRole(member.role || 'member'); setIsEditModalOpen(true); }}
                             className="rounded-xl bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 h-10 px-4"
                           >
-                            Edit
+                            Edit Data & Jabatan
                           </Button>
                           {isAdmin && member.uid !== profile.uid && (
                             <Button 
@@ -735,11 +736,17 @@ export default function Members() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)} />
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="z-[110] bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl relative border border-slate-200">
-              <h2 className="text-2xl font-black text-slate-900 mb-6 uppercase tracking-tighter">Edit Profil Siswa</h2>
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900 mb-6 uppercase tracking-tighter">
+                {editingMember ? 'Edit Profil Anggota' : 'Daftarkan Akun Baru'}
+              </h2>
+              <form onSubmit={handleSaveMember} className="space-y-4">
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Nama Lengkap</label>
                   <input name="displayName" defaultValue={editingMember?.displayName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Email (Login UID)</label>
+                  <input name="email" type="email" defaultValue={editingMember?.email} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -753,6 +760,39 @@ export default function Members() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Jabatan Sistem</label>
+                    <select 
+                      name="role" 
+                      defaultValue={editingMember?.role} 
+                      onChange={(e) => setEditingRole(e.target.value)}
+                      className="w-full px-5 py-3 bg-slate-100 border border-slate-200 rounded-2xl outline-none font-bold text-xs"
+                    >
+                      <option value="member">Siswa</option>
+                      <option value="class_treasurer">Bendahara Kelas</option>
+                      <option value="staff">Tata Usaha (TU)</option>
+                      <option value="treasurer">Bendahara Sekolah</option>
+                      <option value="admin">Kepala Sekolah (Admin)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">Tugas Khusus</label>
+                    {editingRole === 'staff' ? (
+                      <select name="assignedGrade" defaultValue={editingMember?.assignedGrade} className="w-full px-5 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl outline-none font-bold text-xs text-indigo-600">
+                        <option value="">Status TU</option>
+                        <option value="7">Tingkat 7</option>
+                        <option value="8">Tingkat 8</option>
+                        <option value="9">Tingkat 9</option>
+                      </select>
+                    ) : (
+                      <div className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-xs text-slate-400 flex items-center justify-center">
+                        None
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block tracking-widest">WA Siswa</label>
                     <input name="phone" defaultValue={editingMember?.phone} placeholder="628..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none font-bold" />
                   </div>
@@ -764,7 +804,9 @@ export default function Members() {
                 
                 <div className="pt-4 flex gap-3">
                   <Button type="button" variant="ghost" className="flex-1" onClick={() => setIsEditModalOpen(false)}>Batal</Button>
-                  <Button type="submit" variant="brand" className="flex-1" isLoading={updatingId === editingMember?.id}>Simpan</Button>
+                  <Button type="submit" variant="brand" className="flex-1" isLoading={!!updatingId}>
+                    {editingMember ? 'Simpan Perubahan' : 'Daftarkan Sekarang'}
+                  </Button>
                 </div>
               </form>
             </motion.div>
