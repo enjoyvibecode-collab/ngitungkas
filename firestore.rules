@@ -55,8 +55,8 @@ service cloud.firestore {
     // 1. Users Collection - Identity Integrity (Pillar 2, 6)
     match /users/{userId} {
       function isValidUser(data) {
-        return (data.displayName is string && data.displayName.size() <= 100) &&
-               (data.email is string) &&
+        return (data.get('displayName', '') is string && data.get('displayName', '').size() <= 100) &&
+               (data.get('email', '') is string) &&
                (data.get('role', 'member') in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
                (data.get('orgId', null) == null || isValidId(data.get('orgId', ''))) &&
                (data.get('uid', '') == userId);
@@ -76,13 +76,13 @@ service cloud.firestore {
       
       allow create: if isSignedIn() && isValidUser(incoming()) && (
         (request.auth.uid == userId) ||
-        (isFinanceRole(incoming().get('orgId', '')))
+        (isAdministrativeRole(incoming().get('orgId', '')))
       );
       
       allow update: if isSignedIn() && isValidUser(incoming()) && (
         // Self Update - Restricted Fields (Pillar 4)
         (request.auth.uid == userId && (
-          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName', 'orgId', 'role']) ||
           (existing().get('orgId', null) == null && incoming().get('orgId', null) != null)
         )) ||
         // Admin Update

@@ -167,6 +167,7 @@ export default function Members() {
           const userRef = doc(db, 'users', docId);
 
           batch.set(userRef, {
+            uid: docId,
             displayName,
             nisn: nisn || "",
             email: email || `${nisn || Math.random().toString(36).substring(7)}@no-email.edu`,
@@ -388,6 +389,7 @@ export default function Members() {
         const docId = `manual_${profile.orgId}_${updates.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
         await setDoc(doc(db, 'users', docId), {
           ...updates,
+          uid: docId,
           orgId: profile.orgId,
           orgName: profile.orgName,
           savingsBalance: 0,
