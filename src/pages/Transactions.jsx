@@ -70,7 +70,7 @@ export default function Transactions() {
   );
 
   const handleDelete = (tx) => {
-    if (profile?.role !== 'admin' && profile?.role !== 'treasurer') return;
+    if (profile?.role !== 'admin' && profile?.role !== 'treasurer' && profile?.role !== 'staff' && profile?.role !== 'teacher') return;
     
     setConfirmModal({
       isOpen: true,
@@ -120,7 +120,7 @@ export default function Transactions() {
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" /> Export
           </Button>
-          {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+          {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher') && (
             <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
               <Plus className="w-4 h-4 mr-2" /> Catat Kas
             </Button>

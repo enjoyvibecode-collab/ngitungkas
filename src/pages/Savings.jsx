@@ -267,7 +267,7 @@ export default function Savings() {
             Simpanan Mandiri • {profile?.orgName || 'Sekolah'}
           </p>
         </div>
-        {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
+        {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher' || profile?.role === 'staff') && (
           <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" /> Setor Tabungan
           </Button>
@@ -354,7 +354,7 @@ export default function Savings() {
                     <div className="text-right">
                       <p className="text-lg font-black text-slate-900 tracking-tight">{formatCurrency(s.balance)}</p>
                     </div>
-                    {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
+                    {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher' || profile?.role === 'staff') && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
                         <Button variant="ghost" size="sm" onClick={() => { setModalType('deposit'); setIsModalOpen(true); }} className="p-2 border border-slate-100 rounded-xl hover:bg-emerald-50 hover:border-emerald-100">
                           <ArrowUpCircle className="w-5 h-5 text-emerald-600" />

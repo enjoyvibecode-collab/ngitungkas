@@ -32,6 +32,7 @@ import {
 export default function Dashboard() {
   const { profile, user } = useAuth();
   const isAdmin = profile?.role === 'admin';
+  const canManageData = isAdmin || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher';
   const [stats, setStats] = useState({
     balance: 0,
     income: 0,
@@ -354,7 +355,7 @@ export default function Dashboard() {
           title="Data Siswa Terakhir" 
           className="col-span-12 lg:col-span-6"
           action={
-            (isAdmin || profile?.role === 'treasurer' || profile?.role === 'teacher') && (
+            canManageData && (
               <Link to="/members" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
                 Lihat Semua Siswa
               </Link>
@@ -409,7 +410,7 @@ export default function Dashboard() {
                     <div className="text-[9px] text-rose-600 uppercase font-bold tracking-wider">Belum Lunas</div>
                   </div>
                 </div>
-                {isAdmin && (
+                {canManageData && (
                   <button 
                     onClick={() => {
                       const msg = `Halo ${member.displayName}, pengingat dari NgitungKas untuk iuran bulan ini. Mohon segera diselesaikan ya. Terima kasih!`;

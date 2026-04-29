@@ -306,7 +306,7 @@ export default function Billing() {
             <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600" />
             <span className="text-[10px] font-black uppercase tracking-widest">Eksport</span>
           </Button>
-          {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+          {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher') && (
             <Button className="rounded-2xl shadow-lg shadow-indigo-200" onClick={() => setIsBillModalOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               <span className="text-[10px] font-black uppercase tracking-widest">Buat Tagihan</span>
@@ -510,7 +510,7 @@ export default function Billing() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                             {(profile?.role === 'admin' || profile?.role === 'treasurer') && bill.status !== 'paid' && (
+                             {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher') && bill.status !== 'paid' && (
                                <Button 
                                 size="sm" 
                                 className="rounded-xl h-9 px-4" 

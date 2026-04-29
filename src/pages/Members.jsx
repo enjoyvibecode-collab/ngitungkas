@@ -346,6 +346,7 @@ export default function Members() {
   };
 
   const isAdmin = profile?.role === 'admin';
+  const canManageMembers = isAdmin || profile?.role === 'staff' || profile?.role === 'treasurer';
   const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
 
   const filteredMembers = members.filter(m => {
@@ -429,7 +430,7 @@ export default function Members() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
-          {isAdmin && (
+          {canManageMembers && (
             <Button 
               className="rounded-2xl shadow-lg shadow-indigo-200 h-full px-6"
               onClick={() => {
@@ -442,7 +443,7 @@ export default function Members() {
               <span className="text-[10px] font-black uppercase tracking-widest">Akun Baru</span>
             </Button>
           )}
-          {(isAdmin || profile?.role === 'treasurer') && (
+          {canManageMembers && (
             <div className="flex gap-2">
               <Button 
                 variant="ghost" 
@@ -583,7 +584,7 @@ export default function Members() {
                         </span>
                       </div>
                     </td>
-                    {(isAdmin || profile?.role === 'treasurer') && (
+                    {canManageMembers && (
                       <td className="px-8 py-5 text-right">
                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                           <Button 
