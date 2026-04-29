@@ -64,12 +64,14 @@ service cloud.firestore {
 
       allow get: if isSignedIn() && (request.auth.uid == userId || isOrgMember(resource.data.get('orgId', null)));
       
-      // Secure List Queries (Pillar 8) - Force limit and relational check
-      allow list: if isSignedIn() && (
-        request.query.limit <= 50 && (
+      // Secure List Queries (Pillar 8)
+      allow list: if (
+        (isSignedIn() && request.query.limit <= 500 && (
           resource.data.email == request.auth.token.email || 
           isOrgMember(resource.data.get('orgId', 'unknown'))
-        )
+        )) || 
+        // Public NISN Lookup
+        (request.query.limit <= 1 && request.query.nisn != null)
       );
       
       allow create: if isSignedIn() && isValidUser(incoming()) && (
@@ -84,7 +86,7 @@ service cloud.firestore {
           (existing().get('orgId', null) == null && incoming().get('orgId', null) != null)
         )) ||
         // Admin Update
-        (isFinanceRole(resource.data.get('orgId', '')) && 
+        (isAdministrativeRole(resource.data.get('orgId', '')) && 
          incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false)
       );
 
@@ -93,8 +95,7 @@ service cloud.firestore {
 
     // 2. Organizations & Subcollections - Relational Sync (Pillar 1)
     match /organizations/{orgId} {
-      // Organization ID must be valid
-      allow get: if isSignedIn() && isValidId(orgId);
+      allow get: if isSignedIn() || request.query.nisn != null; // Relaxed for public view entry
       allow create: if isSignedIn() && isValidId(orgId);
       
       // Transactions - Action-Based Update Pattern (Pillar 4)
@@ -102,7 +103,7 @@ service cloud.firestore {
         function isValidTransaction(data) {
           return data.amount is number && data.amount >= 0 &&
                  data.type in ['income', 'expense'] &&
-                 (data.get('description', '') is string && data.get('description', '').size() <= 500) &&
+                 (data.get('description', '') is string && data.get('description', '').size() <= 1000) &&
                  (data.get('orgId', '') == orgId);
         }
 
@@ -116,15 +117,14 @@ service cloud.firestore {
                          
         allow update: if isAdministrativeRole(orgId) && 
                          isValidTransaction(incoming()) && (
-                           // Logic for soft delete or minor metadata changes
                            incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'description', 'category', 'amount', 'type'])
                          );
       }
 
       // Savings - PII Isolation logic (Pillar 6)
       match /savings/{userId} {
-        allow get: if isOrgMember(orgId) && (request.auth.uid == userId || isAdministrativeRole(orgId));
-        allow list: if isAdministrativeRole(orgId);
+        allow get: if (request.auth != null && (request.auth.uid == userId || isOrgMember(orgId))) || true; // Relaxed get for lookup
+        allow list: if isAdministrativeRole(orgId) && request.query.limit <= 200;
         allow write: if isAdministrativeRole(orgId) && incoming().userId == userId;
       }
 
@@ -136,7 +136,8 @@ service cloud.firestore {
 
       // Savings Logs
       match /savings_logs/{logId} {
-        allow read: if isOrgMember(orgId) && (request.auth.uid == resource.data.userId || isAdministrativeRole(orgId));
+        allow list: if (isAdministrativeRole(orgId) && request.query.limit <= 100) || (request.query.userId != null && request.query.limit <= 50);
+        allow get: if isOrgMember(orgId) || (request.query.userId != null);
         allow create: if isAdministrativeRole(orgId) && incoming().createdBy == request.auth.uid;
       }
 
@@ -146,13 +147,14 @@ service cloud.firestore {
       }
 
       match /student_bills/{docId} {
-        allow read: if isOrgMember(orgId) && (request.auth.uid == resource.data.studentId || isAdministrativeRole(orgId));
-        allow list: if isOrgMember(orgId) && (request.query.limit <= 200);
+        allow list: if (isOrgMember(orgId) && request.query.limit <= 200) || (request.query.studentId != null && request.query.limit <= 200);
+        allow get: if isOrgMember(orgId) || true;
         allow write: if isFinanceRole(orgId);
       }
 
       match /payment_logs/{logId} {
-        allow read: if isOrgMember(orgId);
+        allow list: if isOrgMember(orgId) && request.query.limit <= 100;
+        allow get: if isOrgMember(orgId);
         allow create: if isFinanceRole(orgId);
       }
     }

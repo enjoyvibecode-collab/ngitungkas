@@ -112,7 +112,8 @@ export default function Dashboard() {
         collection(db, 'organizations', profile.orgId, 'transactions'),
         where('category', '==', 'Iuran Rutin'),
         where('date', '>=', Timestamp.fromDate(startOfMonth)),
-        where('date', '<=', Timestamp.fromDate(endOfMonth))
+        where('date', '<=', Timestamp.fromDate(endOfMonth)),
+        limit(500)
       );
 
       if (unsubscribePayments) unsubscribePayments();

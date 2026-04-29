@@ -22,7 +22,8 @@ import {
   where, 
   updateDoc, 
   doc,
-  writeBatch 
+  writeBatch,
+  limit 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';

@@ -65,7 +65,8 @@ export default function Contributions() {
     const q = query(
       collection(db, 'users'),
       where('orgId', '==', profile.orgId),
-      orderBy('displayName', 'asc')
+      orderBy('displayName', 'asc'),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -93,7 +94,8 @@ export default function Contributions() {
       collection(db, 'organizations', profile.orgId, 'transactions'),
       where('date', '>=', Timestamp.fromDate(startOfMonth)),
       where('date', '<=', Timestamp.fromDate(endOfMonth)),
-      where('category', '==', 'Iuran Rutin')
+      where('category', '==', 'Iuran Rutin'),
+      limit(500)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

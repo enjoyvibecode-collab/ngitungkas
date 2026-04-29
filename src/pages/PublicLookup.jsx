@@ -63,9 +63,9 @@ export default function PublicLookup() {
       const studentData = { id: studentSnap.docs[0].id, ...studentSnap.docs[0].data() };
       setStudent(studentData);
 
-      // 2. Fetch Savings History
+      // 2. Fetch Savings History (Logs)
       const savingsQuery = query(
-        collection(db, 'organizations', studentData.orgId, 'savings'),
+        collection(db, 'organizations', studentData.orgId, 'savings_logs'),
         where('userId', '==', studentData.id),
         orderBy('createdAt', 'desc'),
         limit(50)
@@ -76,7 +76,8 @@ export default function PublicLookup() {
       // 3. Fetch Bills
       const billsQuery = query(
         collection(db, 'organizations', studentData.orgId, 'student_bills'),
-        where('studentId', '==', studentData.id)
+        where('studentId', '==', studentData.id),
+        limit(200)
       );
       const billsSnap = await getDocs(billsQuery);
       setBills(billsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));

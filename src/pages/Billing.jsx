@@ -95,7 +95,7 @@ export default function Billing() {
       setBillTypes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubBills = onSnapshot(collection(orgRef, 'student_bills'), (snap) => {
+    const unsubBills = onSnapshot(query(collection(orgRef, 'student_bills'), limit(200)), (snap) => {
       setStudentBills(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -103,10 +103,9 @@ export default function Billing() {
       setPaymentLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubMembers = onSnapshot(collection(db, 'users'), (snap) => {
+    const unsubMembers = onSnapshot(query(collection(db, 'users'), where('orgId', '==', profile.orgId), limit(500)), (snap) => {
       const filtered = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.orgId === profile.orgId && u.role === 'member');
+        .map(d => ({ id: d.id, ...d.data() }));
       setMembers(filtered);
       setIsLoading(false);
     });
