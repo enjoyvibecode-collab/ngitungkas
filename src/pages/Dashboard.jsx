@@ -491,8 +491,35 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Activity Timeline */}
-        <Card title="Aktivitas Terbaru" className="col-span-12 lg:col-span-12" variant="dark">
+        <Card title="Aktivitas Terbaru" className="col-span-12 lg:col-span-12" variant="dark"
+          action={
+            isAdmin && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={async () => {
+                  if (confirm("⚠️ PERINGATAN: Apakah Bapak/Ibu yakin ingin MENGHAPUS SEMUA transaksi? Ini akan meriset saldo kas organisasi Anda. Tindakan ini tidak dapat dibatalkan.")) {
+                    try {
+                      const q = query(collection(db, 'organizations', profile.orgId, 'transactions'), where('isDeleted', '==', false));
+                      const snap = await getDocs(query(collection(db, 'organizations', profile.orgId, 'transactions')));
+                      const batch = writeBatch(db);
+                      snap.docs.forEach(doc => {
+                        batch.update(doc.ref, { isDeleted: true, updatedAt: serverTimestamp() });
+                      });
+                      await batch.commit();
+                      alert("Data berhasil dibersihkan (ditandai terhapus).");
+                    } catch (err) {
+                      alert("Gagal membersihkan data: " + err.message);
+                    }
+                  }
+                }}
+                className="bg-white/5 border-white/10 text-rose-400 hover:bg-rose-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+              >
+                Reset Semua Transaksi
+              </Button>
+            )
+          }
+        >
           <div className="space-y-4">
             {recentTransactions.length > 0 ? (
               recentTransactions.map((tx) => (

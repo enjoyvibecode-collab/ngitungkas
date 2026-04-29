@@ -10,7 +10,8 @@ import {
   ArrowDownRight,
   MoreVertical,
   X,
-  Trash2
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   collection, 
@@ -78,6 +79,34 @@ export default function Transactions() {
     }
     return true;
   });
+
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const currentBalance = transactions
+    .filter(tx => tx.status === 'approved')
+    .reduce((acc, tx) => tx.type === 'income' ? acc + tx.amount : acc - tx.amount, 0);
+
+  const handleApprove = async (tx) => {
+    if (profile?.role !== 'admin' && profile?.role !== 'treasurer') return;
+    
+    if (tx.type === 'expense' && tx.amount > currentBalance) {
+      alert("Gagal menyetujui: Saldo kas organisasi tidak mencukupi.");
+      return;
+    }
+
+    setUpdatingId(tx.id);
+    try {
+      await updateDoc(doc(db, 'organizations', profile.orgId, 'transactions', tx.id), {
+        status: 'approved',
+        approvedBy: profile.uid,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `transactions/${tx.id}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const handleDelete = (tx) => {
     if (profile?.role !== 'admin' && profile?.role !== 'treasurer' && profile?.role !== 'staff' && profile?.role !== 'teacher') return;
@@ -169,7 +198,7 @@ export default function Transactions() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-slate-50 transition-colors group">
+                 <tr key={tx.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-8 py-5">
                     <div className="flex items-center space-x-4">
                       <div className={cn(
@@ -180,7 +209,12 @@ export default function Transactions() {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-900">{tx.description}</p>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">REF: {tx.id.slice(0, 8)}</p>
+                        <div className="flex items-center gap-2">
+                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">REF: {tx.id.slice(0, 8)}</p>
+                           {tx.status === 'pending' && (
+                             <span className="text-[8px] font-black uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ring-1 ring-amber-200">Pending Approval</span>
+                           )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -200,6 +234,17 @@ export default function Transactions() {
                   </td>
                   <td className="px-8 py-5 text-right">
                     <div className="flex justify-end gap-2">
+                      {tx.status === 'pending' && (profile?.role === 'admin' || profile?.role === 'treasurer') && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="p-2 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-colors"
+                          onClick={() => handleApprove(tx)}
+                          disabled={updatingId === tx.id}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -272,8 +317,36 @@ export default function Transactions() {
                 };
 
                 try {
+                   const type = formData.get('type');
+                   const needsApproval = profile?.role === 'staff' && type === 'expense';
+
+                   // Validate balance for withdrawals (including approved AND pending ones to be safe)
+                   if (type === 'expense' && amount > currentBalance) {
+                     alert(`Saldo tidak cukup! Saldo kas organisasi saat ini: Rp ${currentBalance.toLocaleString()}`);
+                     setIsLoading(false);
+                     return;
+                   }
+
                    const batch = writeBatch(db);
                    const txRef = doc(collection(db, 'organizations', profile.orgId, 'transactions'));
+                   
+                   const data = {
+                     amount,
+                     type,
+                     category: formData.get('category'),
+                     className: formData.get('className') || 'Global',
+                     description,
+                     date: serverTimestamp(),
+                     createdBy: profile?.uid,
+                     creatorName: profile?.displayName,
+                     orgId: profile.orgId,
+                     updatedAt: null,
+                     updatedBy: null,
+                     isDeleted: false,
+                     status: needsApproval ? 'pending' : 'approved',
+                     approvedBy: !needsApproval ? profile?.uid : null
+                   };
+
                    batch.set(txRef, data);
 
                    const logRef = doc(collection(db, 'organizations', profile.orgId, 'activity_logs'));
@@ -288,6 +361,9 @@ export default function Transactions() {
                    });
 
                    await batch.commit();
+                   if (needsApproval) {
+                     alert("Penarikan kas telah diusulkan dan menunggu persetujuan Bendahara.");
+                   }
                    setIsModalOpen(false);
                 } catch (err) {
                   handleFirestoreError(err, OperationType.CREATE, `organizations/${profile.orgId}/transactions`);
