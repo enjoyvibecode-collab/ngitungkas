@@ -311,7 +311,7 @@ export default function Contributions() {
         <div>
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Iuran Bulanan</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            SPP & Iuran Sekolah • SMP Negeri 1 Manonjaya
+            SPP & Iuran Sekolah • {profile?.orgName || 'Sekolah'}
           </p>
         </div>
         

@@ -51,8 +51,9 @@ service cloud.firestore {
       function isValidUserSchema(data) {
         return (data.displayName is string && data.displayName.size() <= 100) &&
                (data.email is string) &&
-               (data.role in ['admin', 'treasurer', 'teacher', 'member']) &&
+               (data.role in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
                (data.orgId == null || (data.orgId is string && data.orgId.size() <= 64)) &&
+               (data.orgName == null || (data.orgName is string && data.orgName.size() <= 100)) &&
                (data.className == null || (data.className is string && data.className.size() <= 20)) &&
                (data.nisn == null || (data.nisn is string && data.nisn.size() <= 30)) &&
                (data.phone == null || (data.phone is string && data.phone.size() <= 20)) &&
@@ -64,21 +65,26 @@ service cloud.firestore {
       
       // Allow members of the same org to see each other
       allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
-      allow list: if isSignedIn() && (request.query.limit > 0); 
+      
+      // CRITICAL: Allow users to search for their own manual registration record by email
+      allow list: if isSignedIn() && (
+        (resource.data.email == request.auth.token.email) || 
+        (isOrgMember(resource.data.orgId))
+      ); 
       
       allow create: if isSignedIn() && (
-        // Case 1: Self-registration
+        // Case 1: Self-registration (first time Google login)
         (request.auth.uid == userId && isValidUserSchema(incoming()) && incoming().uid == userId) ||
-        // Case 2: Administrative creation (e.g. Bulk Import)
-        (isFinanceRole(incoming().orgId) && incoming().role == 'member' && isValidUserSchema(incoming()))
+        // Case 2: Administrative creation (Manual account by email)
+        (isFinanceRole(incoming().orgId) && incoming().role in ['member', 'staff', 'class_treasurer'] && isValidUserSchema(incoming()))
       );
       
       allow update: if isSignedIn() && isValidUserSchema(incoming()) && (
         // Case 1: User updating their own profile
         (request.auth.uid == userId && (
           // Students/Teachers can update personal info, but NOT role/orgId
-          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn']) ||
-          // First-time setup
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName']) ||
+          // First-time setup (Linking to an Organization)
           (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
         )) ||
         // Case 2: Administrative Updates (Other Users)
@@ -90,18 +96,18 @@ service cloud.firestore {
             (isAdmin(resource.data.orgId) && 
              incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false) ||
             
-            // TREASURER/FINANCE: Management of data but not roles/org
+            // TREASURER/STAFF: Management of data but not vital keys
             (isFinanceRole(resource.data.orgId) && 
-             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'photoURL', 'nisn', 'className']) &&
-             incoming().role == existing().role && incoming().orgId == existing().orgId) ||
-            
-            // TEACHER: Classmates only.
-            (isTeacher(resource.data.orgId) && 
-             existing().className == getProfile().className &&
-             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'className', 'nisn', 'photoURL']) &&
+             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'photoURL', 'nisn', 'className', 'assignedGrade', 'orgName']) &&
              incoming().role == existing().role && incoming().orgId == existing().orgId)
           )
         )
+      );
+      
+      // Allow cleanup after linking
+      allow delete: if isSignedIn() && (
+        (resource.data.isManualCreated == true && resource.data.email == request.auth.token.email) ||
+        (isAdmin(resource.data.orgId))
       );
     }
 

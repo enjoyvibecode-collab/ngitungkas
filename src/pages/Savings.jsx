@@ -262,7 +262,7 @@ export default function Savings() {
         <div>
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Tabungan Siswa</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Simpanan Mandiri • SMP Negeri 1 Manonjaya
+            Simpanan Mandiri • {profile?.orgName || 'Sekolah'}
           </p>
         </div>
         {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'teacher') && (

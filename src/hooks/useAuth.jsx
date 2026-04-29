@@ -25,10 +25,6 @@ export function AuthProvider({ children }) {
             
             // Check if there is a manual record for this email
             try {
-              const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
-              const q = query(collection(db, 'users'), where('email', '==', user.email), where('isManualCreated', '==', true));
-              const querySnapshot = await getDocs(q);
-              
               let baseProfile = {
                 uid: user.uid,
                 displayName: user.displayName || 'User',
@@ -39,27 +35,37 @@ export function AuthProvider({ children }) {
                 createdAt: serverTimestamp(),
               };
 
-              if (!querySnapshot.empty) {
-                // We found a manual account!
-                const manualDoc = querySnapshot.docs[0];
-                const manualData = manualDoc.data();
-                console.log("Found manual account, merging data...");
+              try {
+                const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
+                const q = query(collection(db, 'users'), where('email', '==', user.email), where('isManualCreated', '==', true));
+                const querySnapshot = await getDocs(q);
                 
-                baseProfile = {
-                  ...baseProfile,
-                  ...manualData,
-                  uid: user.uid, // ensure UID is correct
-                  isManualCreated: false, // mark as claimed
-                  claimedAt: serverTimestamp()
-                };
+                if (!querySnapshot.empty) {
+                  // We found a manual account!
+                  const manualDoc = querySnapshot.docs[0];
+                  const manualData = manualDoc.data();
+                  console.log("Found manual account, merging data...");
+                  
+                  baseProfile = {
+                    ...baseProfile,
+                    ...manualData,
+                    uid: user.uid, // ensure UID is correct
+                    isManualCreated: false, // mark as claimed
+                    claimedAt: serverTimestamp()
+                  };
 
-                // Delete the manual doc to clean up
-                const batch = writeBatch(db);
-                batch.set(docRef, baseProfile);
-                batch.delete(manualDoc.ref);
-                await batch.commit();
-              } else {
-                // Standard new user
+                  // Delete the manual doc to clean up
+                  const batch = writeBatch(db);
+                  batch.set(docRef, baseProfile);
+                  batch.delete(manualDoc.ref);
+                  await batch.commit();
+                } else {
+                  // Standard new user
+                  await setDoc(docRef, baseProfile);
+                }
+              } catch (err) {
+                console.error("Error during profile linking, falling back to standard profile:", err);
+                // Even if linking fails, ensure user has a profile doc
                 await setDoc(docRef, baseProfile);
               }
               setProfile(baseProfile);

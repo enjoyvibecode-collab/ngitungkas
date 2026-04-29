@@ -6,7 +6,7 @@ import { Receipt, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Landing() {
-  const { user, signIn, loading: authLoading } = useAuth();
+  const { user, profile, signIn, loading: authLoading } = useAuth();
   const [isSigningIn, setIsSigningIn] = React.useState(false);
 
   const handleSignIn = async () => {
@@ -54,7 +54,7 @@ export default function Landing() {
             <span className="text-slate-300">SMPN 1 Manonjaya.</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
-            Sistem Tabungan & Iuran Digital untuk SMP Negeri 1 Manonjaya. <br className="hidden md:block"/>
+            Sistem Tabungan & Iuran Digital untuk {profile?.orgName || 'Sekolah Anda'}. <br className="hidden md:block"/>
             Transparansi keuangan sekolah dalam satu genggaman.
           </p>
         </motion.div>
@@ -112,7 +112,7 @@ export default function Landing() {
                 <span>Terms</span>
                 <span>Audit Log</span>
              </div>
-             <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">&copy; 2026 NgitungKas Edu Platform. Dedicated for SMP Negeri 1 Manonjaya.</p>
+             <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">&copy; 2026 NgitungKas Edu Platform. Dedicated for {profile?.orgName || 'Your School'}.</p>
           </div>
         </footer>
       </div>

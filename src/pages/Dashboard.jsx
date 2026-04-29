@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [chartData, setChartData] = useState([]);
   const [members, setMembers] = useState([]);
   const [unpaidMembers, setUnpaidMembers] = useState([]);
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     if (!profile?.orgId) return;
@@ -138,6 +139,7 @@ export default function Dashboard() {
     if (!orgName) return;
 
     const slug = orgName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
+    setUpdatingId('creating');
 
     try {
       // 1. Create Organization doc
@@ -148,17 +150,23 @@ export default function Dashboard() {
         createdBy: profile.uid
       });
 
-      // 2. Update User profile
+      // 2. Update User profile with both ID and Name for fast access
       const userRef = doc(db, 'users', profile.uid);
       
       await updateDoc(userRef, {
         orgId: slug,
+        orgName: orgName,
         role: 'admin'
       });
-      // Profile will auto-update via AuthContext listener
+      
+      // Force local update if snapshot is slow
+      window.location.reload(); 
     } catch (err) {
+      console.error("Creation failed:", err);
       handleFirestoreError(err, OperationType.WRITE, `organizations/${slug}`);
       alert("Gagal membuat organisasi: " + err.message);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -233,8 +241,8 @@ export default function Dashboard() {
                 className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
               />
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setOnboardingMode('select')} className="flex-1 py-4 rounded-2xl">Kembali</Button>
-                <Button type="submit" variant="brand" className="flex-[2] py-4 rounded-2xl">Buat & Masuk</Button>
+                <Button type="button" variant="outline" onClick={() => setOnboardingMode('select')} className="flex-1 py-4 rounded-2xl" disabled={!!updatingId}>Kembali</Button>
+                <Button type="submit" variant="brand" className="flex-[2] py-4 rounded-2xl" isLoading={!!updatingId}>Buat & Masuk</Button>
               </div>
             </form>
           </div>
@@ -267,9 +275,11 @@ export default function Dashboard() {
     <div className="flex flex-col gap-6">
       <header className="flex justify-between items-end border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">SMP Negeri 1 Manonjaya</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">
+            {profile?.orgName || 'Sekolah Belum Terdaftar'}
+          </h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Sistem Tabungan Digital Sekolah • NgitungKas Edu
+            Sistem Tabungan Digital Sekolah • {profile?.orgName ? 'Unit Pengelola Kas' : 'Pendaftaran'}
           </p>
         </div>
         <div className="flex gap-2">
