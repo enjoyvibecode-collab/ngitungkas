@@ -51,7 +51,7 @@ export default function Landing() {
           </div>
           <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9]">
             NgitungKas Edu <br/>
-            <span className="text-slate-300">SMPN 1 Manonjaya.</span>
+            <span className="text-slate-300">Institusi Pendidikan Modern.</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
             Sistem Tabungan Siswa & Manajemen Kas Kelas Digital. <br className="hidden md:block"/>

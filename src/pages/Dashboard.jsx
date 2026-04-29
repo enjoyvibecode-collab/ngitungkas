@@ -248,7 +248,7 @@ export default function Dashboard() {
                 name="orgName" 
                 type="text" 
                 required 
-                placeholder="Nama Sekolah (misal: SMPN 1 Manonjaya)"
+                placeholder="Nama Sekolah atau Institusi Pendidikan"
                 className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700"
               />
               <div className="flex gap-2">

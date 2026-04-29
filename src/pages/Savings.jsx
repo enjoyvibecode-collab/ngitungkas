@@ -402,7 +402,7 @@ export default function Savings() {
               <div className="py-24 text-center flex flex-col items-center justify-center opacity-50 group">
                  <PiggyBank className="w-12 h-12 text-slate-200 mb-4 group-hover:scale-110 transition-transform duration-500" />
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Belum Ada Rekaman Tabungan</p>
-                 <p className="text-[8px] text-slate-300 font-bold uppercase mt-1">Database Digital SMPN 1 Manonjaya</p>
+                 <p className="text-[8px] text-slate-300 font-bold uppercase mt-1">Database Digital Terintegrasi</p>
               </div>
             )}
           </div>
