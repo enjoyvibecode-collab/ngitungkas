@@ -20,60 +20,37 @@ export function AuthProvider({ children }) {
         unsubProfile = onSnapshot(docRef, async (docSnap) => {
           if (docSnap.exists()) {
             setProfile(docSnap.data());
+            setLoading(false);
           } else {
-            console.log("No profile found by UID, checking for manual registration by email:", user.email);
+            console.log("No profile found for UID:", user.uid, "initializing...");
             
-            // Check if there is a manual record for this email
+            // Basic profile shell
+            const baseProfile = {
+              uid: user.uid,
+              displayName: user.displayName || 'User',
+              email: user.email || '',
+              photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
+              role: 'member',
+              orgId: null,
+              orgName: null,
+              createdAt: serverTimestamp(),
+            };
+
             try {
-              let baseProfile = {
-                uid: user.uid,
-                displayName: user.displayName || 'User',
-                email: user.email || '',
-                photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
-                role: 'member',
-                orgId: null,
-                createdAt: serverTimestamp(),
-              };
-
-              try {
-                const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
-                const q = query(collection(db, 'users'), where('email', '==', user.email), where('isManualCreated', '==', true));
-                const querySnapshot = await getDocs(q);
-                
-                if (!querySnapshot.empty) {
-                  // We found a manual account!
-                  const manualDoc = querySnapshot.docs[0];
-                  const manualData = manualDoc.data();
-                  console.log("Found manual account, merging data...");
-                  
-                  baseProfile = {
-                    ...baseProfile,
-                    ...manualData,
-                    uid: user.uid, // ensure UID is correct
-                    isManualCreated: false, // mark as claimed
-                    claimedAt: serverTimestamp()
-                  };
-
-                  // Delete the manual doc to clean up
-                  const batch = writeBatch(db);
-                  batch.set(docRef, baseProfile);
-                  batch.delete(manualDoc.ref);
-                  await batch.commit();
-                } else {
-                  // Standard new user
-                  await setDoc(docRef, baseProfile);
-                }
-              } catch (err) {
-                console.error("Error during profile linking, falling back to standard profile:", err);
-                // Even if linking fails, ensure user has a profile doc
-                await setDoc(docRef, baseProfile);
-              }
+              // Standard new user creation
+              console.log("Creating new profile doc...");
+              await setDoc(docRef, baseProfile);
               setProfile(baseProfile);
+              console.log("Profile created successfully.");
             } catch (err) {
-              console.error("Error during profile linking:", err);
+              console.error("Critical error during profile creation:", err);
+              // Handle permission denied specially
+              if (err.code === 'permission-denied') {
+                console.warn("Permission denied. Check if rules are deployed and schema is valid.");
+              }
             }
+            setLoading(false);
           }
-          setLoading(false);
         }, (error) => {
           console.error("Profile snapshot error:", error);
           // Don't crash the whole app, but log it

@@ -1,10 +1,10 @@
 {
-  "projectId": "ngitungkas",
-  "appId": "1:971151567193:web:5b60eb9be2739f49bd0448",
-  "apiKey": "AIzaSyAEDxfoAvqdK9GzYDNs5UViDQAccwjwEfs",
-  "authDomain": "ngitungkas.firebaseapp.com",
+  "projectId": "smartkasnesatma",
+  "appId": "1:152115667862:web:3c92377a90f3781e1e33b7",
+  "apiKey": "AIzaSyA1HWRFSlh-Q8-54zSHTJTeNL6fsOOi7oA",
+  "authDomain": "smartkasnesatma.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-94fd0140-e94e-4842-ae66-d74659cf6846",
-  "storageBucket": "ngitungkas.firebasestorage.app",
-  "messagingSenderId": "971151567193",
+  "storageBucket": "smartkasnesatma.firebasestorage.app",
+  "messagingSenderId": "152115667862",
   "measurementId": ""
 }

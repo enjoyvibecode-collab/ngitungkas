@@ -49,57 +49,59 @@ service cloud.firestore {
     // 1. Users Collection
     match /users/{userId} {
       function isValidUserSchema(data) {
-        return (data.displayName is string && data.displayName.size() <= 100) &&
-               (data.email is string) &&
-               (data.role in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
-               (data.orgId == null || (data.orgId is string && data.orgId.size() <= 64)) &&
-               (data.orgName == null || (data.orgName is string && data.orgName.size() <= 100)) &&
-               (data.className == null || (data.className is string && data.className.size() <= 20)) &&
-               (data.nisn == null || (data.nisn is string && data.nisn.size() <= 30)) &&
-               (data.phone == null || (data.phone is string && data.phone.size() <= 20)) &&
-               (data.parentPhone == null || (data.parentPhone is string && data.parentPhone.size() <= 20));
+        let role = data.get('role', 'member');
+        let email = data.get('email', '');
+        let displayName = data.get('displayName', '');
+        
+        return (displayName is string && displayName.size() <= 100) &&
+               (email is string) &&
+               (role in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
+               (data.get('orgId', null) == null || (data.get('orgId', '') is string && data.get('orgId', '').size() <= 64)) &&
+               (data.get('orgName', null) == null || (data.get('orgName', '') is string && data.get('orgName', '').size() <= 100)) &&
+               (data.get('uid', '') == userId);
       }
 
       // Allow users to read their own profile
       allow get: if isSignedIn() && (request.auth.uid == userId);
       
       // Allow members of the same org to see each other
-      allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.orgId));
+      allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.get('orgId', null)));
       
-      // CRITICAL: Allow users to search for their own manual registration record by email
+      // Allow users to search for their own manual registration record by email
       allow list: if isSignedIn() && (
-        (resource.data.email == request.auth.token.email) || 
-        (isOrgMember(resource.data.orgId))
+        (request.query.limit <= 20) && 
+        (resource.data.get('email', '') == request.auth.token.email || isOrgMember(resource.data.get('orgId', '')))
       ); 
       
       allow create: if isSignedIn() && (
-        // Case 1: Self-registration (first time Google login)
-        (request.auth.uid == userId && isValidUserSchema(incoming()) && incoming().uid == userId) ||
-        // Case 2: Administrative creation (Manual account by email)
-        (isFinanceRole(incoming().orgId) && incoming().role in ['member', 'staff', 'class_treasurer'] && isValidUserSchema(incoming()))
+        // Case 1: Self-registration (Google Login)
+        (request.auth.uid == userId && isValidUserSchema(incoming())) ||
+        // Case 2: Administrative creation
+        (isFinanceRole(incoming().get('orgId', '')) && incoming().get('role', 'member') in ['member', 'staff', 'class_treasurer'])
       );
       
       allow update: if isSignedIn() && isValidUserSchema(incoming()) && (
         // Case 1: User updating their own profile
         (request.auth.uid == userId && (
-          // Students/Teachers can update personal info, but NOT role/orgId
+          // Personal info update
           incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName']) ||
           // First-time setup (Linking to an Organization)
-          (existing().orgId == null && incoming().role in ['admin', 'member'] && incoming().orgId != null)
+          (existing().get('orgId', null) == null && incoming().get('role', 'member') in ['admin', 'member'] && incoming().get('orgId', null) != null)
         )) ||
-        // Case 2: Administrative Updates (Other Users)
+        // Case 2: Administrative Updates
         (
           resource != null && request.auth.uid != userId && 
-          isOrgMember(resource.data.orgId) &&
+          isOrgMember(resource.data.get('orgId', null)) &&
           (
             // ADMIN: Full control except immutable system keys
-            (isAdmin(resource.data.orgId) && 
+            (isAdmin(resource.data.get('orgId', null)) && 
              incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false) ||
             
-            // TREASURER/STAFF: Management of data but not vital keys
-            (isFinanceRole(resource.data.orgId) && 
+            // TREASURER/STAFF
+            (isFinanceRole(resource.data.get('orgId', null)) && 
              incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'photoURL', 'nisn', 'className', 'assignedGrade', 'orgName']) &&
-             incoming().role == existing().role && incoming().orgId == existing().orgId)
+             incoming().get('role', 'member') == existing().get('role', 'member') && 
+             incoming().get('orgId', null) == existing().get('orgId', null))
           )
         )
       );
