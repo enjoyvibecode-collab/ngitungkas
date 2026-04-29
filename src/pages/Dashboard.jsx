@@ -30,7 +30,7 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const [stats, setStats] = useState({
     balance: 0,
@@ -139,7 +139,7 @@ export default function Dashboard() {
   const handleCreateOrg = async (e) => {
     e.preventDefault();
     const orgName = e.target.orgName.value.trim();
-    if (!orgName) return;
+    if (!orgName || !user?.uid) return;
 
     const slug = orgName.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).substring(2, 6);
     setUpdatingId('creating');
@@ -150,11 +150,11 @@ export default function Dashboard() {
       await setDoc(doc(db, 'organizations', slug), {
         name: orgName,
         createdAt: serverTimestamp(),
-        createdBy: profile.uid
+        createdBy: user.uid
       });
 
       // 2. Update User profile with both ID and Name for fast access
-      const userRef = doc(db, 'users', profile.uid);
+      const userRef = doc(db, 'users', user.uid);
       
       await updateDoc(userRef, {
         orgId: slug,
@@ -176,7 +176,7 @@ export default function Dashboard() {
   const handleJoinOrg = async (e) => {
     e.preventDefault();
     const orgId = e.target.orgId.value.trim().toLowerCase();
-    if (!orgId) return;
+    if (!orgId || !user?.uid) return;
 
     try {
       // Check if org exists
@@ -188,13 +188,13 @@ export default function Dashboard() {
         return;
       }
 
-      const userRef = doc(db, 'users', profile.uid);
+      const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         orgId: orgId,
         role: 'member' // Default role when joining
       });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       alert("Gagal bergabung: " + err.message);
     }
   };

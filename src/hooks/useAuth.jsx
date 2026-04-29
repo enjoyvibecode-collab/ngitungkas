@@ -24,17 +24,6 @@ export function AuthProvider({ children }) {
           } else {
             console.log("No profile found for UID, checking for manual registration by email:", user.email);
             
-            try {
-              const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
-              
-              // Cek apakah ada akun manual (isManualCreated: true) dengan email yang sama
-              const q = query(
-                collection(db, 'users'), 
-                where('email', '==', user.email), 
-                where('isManualCreated', '==', true)
-              );
-              const querySnapshot = await getDocs(q);
-              
               let baseProfile = {
                 uid: user.uid,
                 displayName: user.displayName || 'User',
@@ -46,37 +35,44 @@ export function AuthProvider({ children }) {
                 createdAt: serverTimestamp(),
               };
 
-              if (!querySnapshot.empty) {
-                // Ditemukan akun manual! Kita ambil datanya
-                const manualDoc = querySnapshot.docs[0];
-                const manualData = manualDoc.data();
-                console.log("Found manual account, merging data...");
+              try {
+                const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
                 
-                baseProfile = {
-                  ...baseProfile,
-                  ...manualData,
-                  uid: user.uid, // Pastikan UID tetap pakai yang dari Google Auth
-                  isManualCreated: false, // Tandai sebagai sudah diklaim
-                  claimedAt: serverTimestamp()
-                };
+                const q = query(
+                  collection(db, 'users'), 
+                  where('email', '==', user.email), 
+                  where('isManualCreated', '==', true)
+                );
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                  const manualDoc = querySnapshot.docs[0];
+                  const manualData = manualDoc.data();
+                  
+                  baseProfile = {
+                    ...baseProfile,
+                    ...manualData,
+                    uid: user.uid,
+                    isManualCreated: false,
+                    claimedAt: serverTimestamp()
+                  };
 
-                // Gunakan Batch untuk memindahkan data (Buat di dokumen UID, hapus dokumen manual)
-                const batch = writeBatch(db);
-                batch.set(docRef, baseProfile);
-                batch.delete(manualDoc.ref);
-                await batch.commit();
-                console.log("Manual account linked successfully.");
-              } else {
-                // Tidak ada akun manual, buat akun member biasa
-                await setDoc(docRef, baseProfile);
+                  const batch = writeBatch(db);
+                  batch.set(docRef, baseProfile);
+                  batch.delete(manualDoc.ref);
+                  await batch.commit();
+                } else {
+                  await setDoc(docRef, baseProfile);
+                }
+              } catch (err) {
+                console.error("Error during profile linking, setting default:", err);
+                // Try simple creation if batch/query failed
+                try { await setDoc(docRef, baseProfile); } catch(e) {}
+              } finally {
+                setProfile(baseProfile);
+                setLoading(false);
               }
-              
-              setProfile(baseProfile);
-            } catch (err) {
-              console.error("Error during profile linking:", err);
             }
-            setLoading(false);
-          }
         }, (error) => {
           console.error("Profile snapshot error:", error);
           // Don't crash the whole app, but log it

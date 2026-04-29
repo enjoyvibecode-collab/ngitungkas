@@ -66,9 +66,11 @@ service cloud.firestore {
       
       // Secure List Queries (Pillar 8)
       allow list: if (
-        (isSignedIn() && request.query.limit <= 500 && (
-          resource.data.email == request.auth.token.email || 
-          isOrgMember(resource.data.get('orgId', 'unknown'))
+        (isSignedIn() && (
+          // Discovery: User searches for their own email (manual registration)
+          (request.query.email == request.auth.token.email) ||
+          // Regular Org Listing
+          (request.query.limit <= 500 && isOrgMember(resource.data.get('orgId', 'unknown')))
         )) || 
         // Public NISN Lookup
         (request.query.limit <= 1 && request.query.nisn != null)
