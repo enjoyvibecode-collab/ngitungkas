@@ -337,11 +337,26 @@ export default function Dashboard() {
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight">
             {profile?.orgName || 'Sekolah Belum Terdaftar'}
           </h1>
-          <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Sistem Tabungan Digital Sekolah • {profile?.orgName ? 'Unit Pengelola Kas' : 'Pendaftaran'}
-          </p>
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            <p className="text-slate-500 font-medium uppercase text-xs tracking-widest">
+              Sistem Tabungan Digital Sekolah • {profile?.orgName ? 'Unit Pengelola Kas' : 'Pendaftaran'}
+            </p>
+            {profile?.orgId && (
+              <p className="text-slate-400 font-bold text-[10px] items-center flex gap-1">
+                ID SEKOLAH: <span className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-600 font-black select-all cursor-pointer" title="Klik untuk pilih ID">{profile.orgId}</span>
+              </p>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => window.open('/cek-tabungan', '_blank')}
+            className="flex items-center gap-2 px-5 py-3 bg-white border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl text-xs font-black uppercase tracking-widest shadow-sm group"
+          >
+            <FileText className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+            Link Cek Siswa
+          </Button>
           <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-bold uppercase">PRO Edition</span>
         </div>
       </header>

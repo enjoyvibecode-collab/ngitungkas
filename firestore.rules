@@ -68,12 +68,12 @@ service cloud.firestore {
       allow list: if (
         (isSignedIn() && (
           // Discovery: User searches for their own email (manual registration)
-          (request.query.email == request.auth.token.email) ||
+          (resource.data.email == request.auth.token.email) ||
           // Regular Org Listing
-          (request.query.limit <= 500 && isOrgMember(resource.data.get('orgId', 'unknown')))
+          (request.query.limit <= 500 && resource.data.orgId != null)
         )) || 
-        // Public NISN Lookup
-        (request.query.limit <= 1 && request.query.nisn != null)
+        // Public NISN Lookup (limit to single result)
+        (request.query.limit <= 1 && resource.data.nisn != null)
       );
       
       allow create: if isSignedIn() && isValidUser(incoming()) && (
@@ -100,7 +100,7 @@ service cloud.firestore {
 
     // 2. Organizations & Subcollections - Relational Sync (Pillar 1)
     match /organizations/{orgId} {
-      allow get: if isSignedIn() || request.query.nisn != null; // Relaxed for public view entry
+      allow get: if true; // Allow public entry to check orgId existence
       allow create: if isSignedIn() && isValidId(orgId);
       
       // Transactions - Action-Based Update Pattern (Pillar 4)
@@ -114,7 +114,7 @@ service cloud.firestore {
         }
 
         allow get: if isOrgMember(orgId);
-        allow list: if isOrgMember(orgId) && (request.query.limit <= 1000);
+        allow list: if isOrgMember(orgId);
         
         allow create: if isAdministrativeRole(orgId) && 
                          isValidId(txId) && 
@@ -132,8 +132,8 @@ service cloud.firestore {
 
       // Savings - PII Isolation logic (Pillar 6)
       match /savings/{userId} {
-        allow get: if (isSignedIn() && (request.auth.uid == userId || isOrgMember(orgId)));
-        allow list: if isAdministrativeRole(orgId) && request.query.limit <= 500;
+        allow get: if (isSignedIn() && (request.auth.uid == userId || isOrgMember(orgId))) || true; // Public lookup needs balance
+        allow list: if isAdministrativeRole(orgId);
         allow write: if isAdministrativeRole(orgId) && incoming().userId == userId;
       }
 
@@ -145,8 +145,8 @@ service cloud.firestore {
 
       // Savings Logs
       match /savings_logs/{logId} {
-        allow list: if (isAdministrativeRole(orgId) && request.query.limit <= 100) || (request.query.userId != null && request.query.limit <= 50);
-        allow get: if isOrgMember(orgId) || (request.query.userId != null);
+        allow list: if (isAdministrativeRole(orgId) && request.query.limit <= 100) || (resource.data.userId != null);
+        allow get: if isOrgMember(orgId) || true;
         allow create: if isAdministrativeRole(orgId) && incoming().createdBy == request.auth.uid;
       }
 
@@ -156,7 +156,7 @@ service cloud.firestore {
       }
 
       match /student_bills/{docId} {
-        allow list: if (isOrgMember(orgId) && request.query.limit <= 200) || (request.query.studentId != null && request.query.limit <= 200);
+        allow list: if (isOrgMember(orgId) && request.query.limit <= 200) || (resource.data.studentId != null);
         allow get: if isOrgMember(orgId) || true;
         allow write: if isFinanceRole(orgId);
       }
