@@ -65,9 +65,19 @@ export default function Transactions() {
     return () => unsubscribe();
   }, [profile]);
 
-  const filteredTransactions = transactions.filter(tx => 
-    filter === 'all' ? true : tx.type === filter
-  );
+  const filteredTransactions = transactions.filter(tx => {
+    const matchesFilter = filter === 'all' ? true : tx.type === filter;
+    if (!matchesFilter) return false;
+
+    // Role based filtering for Staff (TU) and Teacher
+    if (profile?.role === 'staff' && profile?.assignedGrade) {
+      return tx.className && tx.className.startsWith(profile.assignedGrade);
+    }
+    if (profile?.role === 'teacher' && profile?.className) {
+      return tx.className === profile.className;
+    }
+    return true;
+  });
 
   const handleDelete = (tx) => {
     if (profile?.role !== 'admin' && profile?.role !== 'treasurer' && profile?.role !== 'staff' && profile?.role !== 'teacher') return;
@@ -295,10 +305,22 @@ export default function Transactions() {
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Target Kas Kelas</label>
                   <select name="className" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
-                    <option value="Global">Kas Umum / Sekolah</option>
-                    {['7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K'].map(c => (
-                      <option key={c} value={c}>Kelas {c}</option>
-                    ))}
+                    {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+                      <option value="Global">Kas Umum / Sekolah</option>
+                    )}
+                    {['7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K']
+                      .filter(c => {
+                        if (profile?.role === 'staff' && profile?.assignedGrade) {
+                          return c.startsWith(profile.assignedGrade);
+                        }
+                        if (profile?.role === 'teacher' && profile?.className) {
+                          return c === profile.className;
+                        }
+                        return true;
+                      })
+                      .map(c => (
+                        <option key={c} value={c}>Kelas {c}</option>
+                      ))}
                   </select>
                 </div>
                 <div>

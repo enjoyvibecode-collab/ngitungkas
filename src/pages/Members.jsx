@@ -350,8 +350,14 @@ export default function Members() {
   const classes = ['Semua Kelas', ...new Set(members.map(m => m.className || 'Tanpa Kelas'))].sort();
 
   const filteredMembers = members.filter(m => {
-    // Role based filtering for Teacher (Wali Kelas)
+    // 1. Role based filtering for Teacher (Wali Kelas)
     if (profile?.role === 'teacher' && m.className !== profile?.className) return false;
+
+    // 2. Role based filtering for Staff (TU) based on assignedGrade
+    if (profile?.role === 'staff' && profile?.assignedGrade) {
+      // If student has no class or class doesn't start with assigned grade, hide them
+      if (!m.className || !m.className.startsWith(profile.assignedGrade)) return false;
+    }
 
     const matchesSearch = m.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           m.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||

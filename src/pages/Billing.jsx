@@ -83,7 +83,16 @@ export default function Billing() {
     ];
   }, [studentBills]);
 
-  const classes = ['Semua Kelas', '7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K'];
+  const classes = useMemo(() => {
+    const baseClasses = ['Semua Kelas', '7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K'];
+    if (profile?.role === 'staff' && profile?.assignedGrade) {
+      return ['Semua Kelas', ...baseClasses.filter(c => c.startsWith(profile.assignedGrade))];
+    }
+    if (profile?.role === 'teacher' && profile?.className) {
+      return ['Semua Kelas', profile.className];
+    }
+    return baseClasses;
+  }, [profile]);
 
   useEffect(() => {
     if (!profile?.orgId) return;
@@ -245,6 +254,12 @@ export default function Billing() {
 
   const filteredBills = useMemo(() => {
     return studentBills.filter(b => {
+      // 1. Role based filtering for Teacher and Staff
+      if (profile?.role === 'teacher' && b.className !== profile?.className) return false;
+      if (profile?.role === 'staff' && profile?.assignedGrade) {
+        if (!b.className || !b.className.startsWith(profile.assignedGrade)) return false;
+      }
+
       const matchesSearch = b.studentName.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesClass = classFilter === 'Semua Kelas' || b.className === classFilter;
       const matchesType = billFilter === 'Semua Tagihan' || b.billName === billFilter;
@@ -637,10 +652,18 @@ export default function Billing() {
                   <div className="col-span-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest px-1">Tujuan Distribusi</label>
                     <select name="targetType" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" onChange={(e) => setTargetType(e.target.value)}>
-                      <option value="all">Semua Siswa Aktif</option>
-                      <option value="grade7">Hanya Kelas 7</option>
-                      <option value="grade8">Hanya Kelas 8</option>
-                      <option value="grade9">Hanya Kelas 9</option>
+                      {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
+                        <option value="all">Semua Siswa Aktif</option>
+                      )}
+                      {(profile?.role === 'admin' || profile?.role === 'treasurer' || (profile?.role === 'staff' && profile?.assignedGrade === '7')) && (
+                        <option value="grade7">Hanya Kelas 7</option>
+                      )}
+                      {(profile?.role === 'admin' || profile?.role === 'treasurer' || (profile?.role === 'staff' && profile?.assignedGrade === '8')) && (
+                        <option value="grade8">Hanya Kelas 8</option>
+                      )}
+                      {(profile?.role === 'admin' || profile?.role === 'treasurer' || (profile?.role === 'staff' && profile?.assignedGrade === '9')) && (
+                        <option value="grade9">Hanya Kelas 9</option>
+                      )}
                       <option value="class">Pilih Kelas Spesifik</option>
                       <option value="manual">Manual (Pilih Nanti)</option>
                     </select>

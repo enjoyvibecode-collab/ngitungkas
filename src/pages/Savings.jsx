@@ -249,8 +249,13 @@ export default function Savings() {
     if (!s) return false;
     const member = members?.find(m => (m?.uid === s?.userId || m?.id === s?.userId));
     
-    // Role based filtering for Teacher (Wali Kelas)
+    // 1. Role based filtering for Teacher (Wali Kelas)
     if (profile?.role === 'teacher' && member?.className !== profile?.className) return false;
+
+    // 2. Role based filtering for Staff (TU) based on assignedGrade
+    if (profile?.role === 'staff' && profile?.assignedGrade) {
+      if (!member?.className || !member?.className.startsWith(profile.assignedGrade)) return false;
+    }
 
     const matchesSearch = (s?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (member?.nisn || '').includes(searchTerm);
@@ -434,6 +439,10 @@ export default function Savings() {
                 <div>
                   <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Siswa ({
                     members.filter(m => {
+                      // Apply Staff grade filtering in modal too
+                      if (profile?.role === 'staff' && profile?.assignedGrade) {
+                        if (!m.className || !m.className.startsWith(profile.assignedGrade)) return false;
+                      }
                       const matchesClass = modalClassFilter === 'Semua Kelas' || m.className === modalClassFilter;
                       const matchesSearch = (m.displayName || '').toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
                                            (m.nisn || '').includes(modalSearchTerm);
@@ -445,6 +454,10 @@ export default function Savings() {
                       <option value="">-- Hasil Pencarian --</option>
                       {members
                         .filter(m => {
+                          // Apply Staff grade filtering in modal too
+                          if (profile?.role === 'staff' && profile?.assignedGrade) {
+                            if (!m.className || !m.className.startsWith(profile.assignedGrade)) return false;
+                          }
                           const matchesClass = modalClassFilter === 'Semua Kelas' || m.className === modalClassFilter;
                           const matchesSearch = (m.displayName || '').toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
                                                (m.nisn || '').includes(modalSearchTerm);

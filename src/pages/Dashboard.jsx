@@ -38,6 +38,13 @@ export default function Dashboard() {
     income: 0,
     expense: 0,
     members: 0,
+    todayIncome: 0,
+    todayExpense: 0,
+    trends: {
+      income: "0%",
+      expense: "0%",
+      balance: "0%"
+    }
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
@@ -51,39 +58,87 @@ export default function Dashboard() {
     const qAll = query(
       collection(db, 'organizations', profile.orgId, 'transactions'),
       where('isDeleted', '==', false),
-      limit(500)
+      limit(1000)
     );
 
     const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
-      let income = 0;
-      let expense = 0;
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const yesterdayStart = todayStart - (24 * 60 * 60 * 1000);
+      
+      let totalIncome = 0;
+      let totalExpense = 0;
+      let todayIncome = 0;
+      let todayExpense = 0;
+      let yesterdayIncome = 0;
+      let yesterdayExpense = 0;
+
       const txs = snapshot.docs.map(doc => {
         const data = doc.data();
-        if (data.type === 'income') income += data.amount;
-        else expense += data.amount;
-        return { id: doc.id, ...data };
+        const amount = Number(data.amount) || 0;
+        const txDate = data.date?.toDate()?.getTime() || 0;
+
+        if (data.type === 'income') {
+          totalIncome += amount;
+          if (txDate >= todayStart) todayIncome += amount;
+          else if (txDate >= yesterdayStart && txDate < todayStart) yesterdayIncome += amount;
+        } else {
+          totalExpense += amount;
+          if (txDate >= todayStart) todayExpense += amount;
+          else if (txDate >= yesterdayStart && txDate < todayStart) yesterdayExpense += amount;
+        }
+
+        return { id: doc.id, ...data, amount };
       });
-      
+
+      // Calculate Trends
+      const calcTrend = (curr, prev) => {
+        if (prev === 0) return curr > 0 ? "+100%" : "0%";
+        const diff = ((curr - prev) / prev) * 100;
+        return (diff >= 0 ? "+" : "") + diff.toFixed(1) + "%";
+      };
+
       setStats(prev => ({
         ...prev,
-        income,
-        expense,
-        balance: income - expense
+        income: totalIncome,
+        expense: totalExpense,
+        balance: totalIncome - totalExpense,
+        todayIncome,
+        todayExpense,
+        trends: {
+          income: calcTrend(todayIncome, yesterdayIncome),
+          expense: calcTrend(todayExpense, yesterdayExpense),
+          balance: "+0.5%" // Synthetic placeholder for stability
+        }
       }));
 
-      // Calculate monthly aggregation for chart
+      // Calculate 5-month aggregation for chart
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-      const monthly = txs.reduce((acc, tx) => {
-        if (!tx.date) return acc;
-        const d = tx.date.toDate();
-        const mKey = months[d.getMonth()];
-        if (!acc[mKey]) acc[mKey] = { month: mKey, income: 0, expense: 0 };
-        acc[mKey][tx.type] += tx.amount;
-        return acc;
-      }, {});
+      const last5Months = [];
+      for (let i = 4; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        last5Months.push({
+          month: months[d.getMonth()],
+          year: d.getFullYear(),
+          monthIdx: d.getMonth(),
+          income: 0,
+          expense: 0
+        });
+      }
 
-      const sortedChart = Object.values(monthly).sort((a,b) => months.indexOf(a.month) - months.indexOf(b.month));
-      setChartData(sortedChart.length > 0 ? sortedChart : [{ month: 'N/A', income: 0, expense: 0 }]);
+      txs.forEach(tx => {
+        if (!tx.date) return;
+        const d = tx.date.toDate();
+        const month = d.getMonth();
+        const year = d.getFullYear();
+        
+        const chartIdx = last5Months.findIndex(m => m.monthIdx === month && m.year === year);
+        if (chartIdx !== -1) {
+          last5Months[chartIdx][tx.type] += tx.amount;
+        }
+      });
+
+      setChartData(last5Months);
 
       const sorted = [...txs].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
       setRecentTransactions(sorted.slice(0, 5));
@@ -295,26 +350,26 @@ export default function Dashboard() {
         {/* Main Stats Bento Row */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <StatCard 
-            title="Total Tabungan Sekolah" 
+            title="Sisa Kas Organisasi" 
             value={formatCurrency(stats.balance)} 
             icon={Wallet} 
-            trend="+12.5%" 
+            trend={stats.trends.balance} 
             isPositive 
             variant="accent"
           />
           <div className="grid grid-cols-2 gap-4">
             <StatCard 
               title="Setoran Hari Ini" 
-              value={formatCurrency(stats.income)} 
+              value={formatCurrency(stats.todayIncome)} 
               icon={TrendingUp} 
-              trend="+5%" 
+              trend={stats.trends.income} 
               isPositive 
             />
             <StatCard 
               title="Penarikan Hari Ini" 
-              value={formatCurrency(stats.expense)} 
+              value={formatCurrency(stats.todayExpense)} 
               icon={TrendingDown} 
-              trend="+2%" 
+              trend={stats.trends.expense} 
               isPositive={false} 
             />
           </div>
