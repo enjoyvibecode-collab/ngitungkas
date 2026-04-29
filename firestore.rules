@@ -100,10 +100,10 @@ service cloud.firestore {
 
     // 2. Organizations & Subcollections - Relational Sync (Pillar 1)
     match /organizations/{orgId} {
-      allow get: if true; // Allow public entry to check orgId existence
+      allow get: if true; 
       allow create: if isSignedIn() && isValidId(orgId);
       
-      // Transactions - Action-Based Update Pattern (Pillar 4)
+      // Transactions
       match /transactions/{txId} {
         function isValidTransaction(data) {
           return data.amount is number && data.amount >= 0 &&
@@ -123,16 +123,14 @@ service cloud.firestore {
                          
         allow update: if isAdministrativeRole(orgId) && 
                          isValidTransaction(incoming()) && (
-                           // Action: Approve (Only Admin/Treasurer)
                            (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approvedBy', 'updatedAt']) && isFinanceRole(orgId)) ||
-                           // Action: Soft Delete / Edit
                            (incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'description', 'category', 'amount', 'type', 'className', 'status', 'approvedBy']))
                          );
       }
 
-      // Savings - PII Isolation logic (Pillar 6)
+      // Savings
       match /savings/{userId} {
-        allow get: if (isSignedIn() && (request.auth.uid == userId || isOrgMember(orgId))) || true; // Public lookup needs balance
+        allow get: if true;
         allow list: if isAdministrativeRole(orgId);
         allow write: if isAdministrativeRole(orgId) && incoming().userId == userId;
       }
@@ -145,7 +143,7 @@ service cloud.firestore {
 
       // Savings Logs
       match /savings_logs/{logId} {
-        allow list: if (isAdministrativeRole(orgId) && request.query.limit <= 100) || (resource.data.userId != null);
+        allow list: if isOrgMember(orgId) || resource.data.userId != null;
         allow get: if isOrgMember(orgId) || true;
         allow create: if isAdministrativeRole(orgId) && incoming().createdBy == request.auth.uid;
       }
@@ -156,7 +154,7 @@ service cloud.firestore {
       }
 
       match /student_bills/{docId} {
-        allow list: if (isOrgMember(orgId) && request.query.limit <= 200) || (resource.data.studentId != null);
+        allow list: if isOrgMember(orgId) || resource.data.studentId != null;
         allow get: if isOrgMember(orgId) || true;
         allow write: if isFinanceRole(orgId);
       }
