@@ -22,32 +22,58 @@ export function AuthProvider({ children }) {
             setProfile(docSnap.data());
             setLoading(false);
           } else {
-            console.log("No profile found for UID:", user.uid, "initializing...");
+            console.log("No profile found for UID, checking for manual registration by email:", user.email);
             
-            // Basic profile shell
-            const baseProfile = {
-              uid: user.uid,
-              displayName: user.displayName || 'User',
-              email: user.email || '',
-              photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
-              role: 'member',
-              orgId: null,
-              orgName: null,
-              createdAt: serverTimestamp(),
-            };
-
             try {
-              // Standard new user creation
-              console.log("Creating new profile doc...");
-              await setDoc(docRef, baseProfile);
-              setProfile(baseProfile);
-              console.log("Profile created successfully.");
-            } catch (err) {
-              console.error("Critical error during profile creation:", err);
-              // Handle permission denied specially
-              if (err.code === 'permission-denied') {
-                console.warn("Permission denied. Check if rules are deployed and schema is valid.");
+              const { getDocs, query, collection, where, writeBatch } = await import('firebase/firestore');
+              
+              // Cek apakah ada akun manual (isManualCreated: true) dengan email yang sama
+              const q = query(
+                collection(db, 'users'), 
+                where('email', '==', user.email), 
+                where('isManualCreated', '==', true)
+              );
+              const querySnapshot = await getDocs(q);
+              
+              let baseProfile = {
+                uid: user.uid,
+                displayName: user.displayName || 'User',
+                email: user.email || '',
+                photoURL: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
+                role: 'member',
+                orgId: null,
+                orgName: null,
+                createdAt: serverTimestamp(),
+              };
+
+              if (!querySnapshot.empty) {
+                // Ditemukan akun manual! Kita ambil datanya
+                const manualDoc = querySnapshot.docs[0];
+                const manualData = manualDoc.data();
+                console.log("Found manual account, merging data...");
+                
+                baseProfile = {
+                  ...baseProfile,
+                  ...manualData,
+                  uid: user.uid, // Pastikan UID tetap pakai yang dari Google Auth
+                  isManualCreated: false, // Tandai sebagai sudah diklaim
+                  claimedAt: serverTimestamp()
+                };
+
+                // Gunakan Batch untuk memindahkan data (Buat di dokumen UID, hapus dokumen manual)
+                const batch = writeBatch(db);
+                batch.set(docRef, baseProfile);
+                batch.delete(manualDoc.ref);
+                await batch.commit();
+                console.log("Manual account linked successfully.");
+              } else {
+                // Tidak ada akun manual, buat akun member biasa
+                await setDoc(docRef, baseProfile);
               }
+              
+              setProfile(baseProfile);
+            } catch (err) {
+              console.error("Error during profile linking:", err);
             }
             setLoading(false);
           }

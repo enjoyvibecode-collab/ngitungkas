@@ -90,7 +90,10 @@ service cloud.firestore {
          incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false)
       );
 
-      allow delete: if isSignedIn() && isAdmin(resource.data.get('orgId', ''));
+      allow delete: if isSignedIn() && (
+        isAdmin(resource.data.get('orgId', '')) || 
+        (resource.data.get('isManualCreated', false) == true && resource.data.email == request.auth.token.email)
+      );
     }
 
     // 2. Organizations & Subcollections - Relational Sync (Pillar 1)
