@@ -109,11 +109,12 @@ service cloud.firestore {
           return data.amount is number && data.amount >= 0 &&
                  data.type in ['income', 'expense'] &&
                  (data.get('description', '') is string && data.get('description', '').size() <= 1000) &&
-                 (data.get('orgId', '') == orgId);
+                 (data.get('orgId', '') == orgId) &&
+                 (data.get('status', 'approved') in ['pending', 'approved']);
         }
 
         allow get: if isOrgMember(orgId);
-        allow list: if isOrgMember(orgId) && (request.query.limit <= 500);
+        allow list: if isOrgMember(orgId) && (request.query.limit <= 1000);
         
         allow create: if isAdministrativeRole(orgId) && 
                          isValidId(txId) && 
@@ -122,14 +123,17 @@ service cloud.firestore {
                          
         allow update: if isAdministrativeRole(orgId) && 
                          isValidTransaction(incoming()) && (
-                           incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'description', 'category', 'amount', 'type'])
+                           // Action: Approve (Only Admin/Treasurer)
+                           (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approvedBy', 'updatedAt']) && isFinanceRole(orgId)) ||
+                           // Action: Soft Delete / Edit
+                           (incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'description', 'category', 'amount', 'type', 'className', 'status', 'approvedBy']))
                          );
       }
 
       // Savings - PII Isolation logic (Pillar 6)
       match /savings/{userId} {
-        allow get: if (request.auth != null && (request.auth.uid == userId || isOrgMember(orgId))) || true; // Relaxed get for lookup
-        allow list: if isAdministrativeRole(orgId) && request.query.limit <= 200;
+        allow get: if (isSignedIn() && (request.auth.uid == userId || isOrgMember(orgId)));
+        allow list: if isAdministrativeRole(orgId) && request.query.limit <= 500;
         allow write: if isAdministrativeRole(orgId) && incoming().userId == userId;
       }
 

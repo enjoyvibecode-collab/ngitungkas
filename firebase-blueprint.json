@@ -27,10 +27,13 @@
         "type": { "type": "string", "enum": ["income", "expense"] },
         "category": { "type": "string" },
         "description": { "type": "string" },
+        "className": { "type": "string" },
         "date": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" },
         "creatorName": { "type": "string" },
         "isDeleted": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "approvedBy": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string" }
       },
@@ -43,6 +46,8 @@
       "properties": {
         "userId": { "type": "string" },
         "balance": { "type": "number" },
+        "pendingWithdrawal": { "type": "boolean" },
+        "pendingAmount": { "type": "number" },
         "lastUpdated": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "balance"]
@@ -55,13 +60,14 @@
         "userId": { "type": "string" },
         "type": { "type": "string", "enum": ["deposit", "withdraw"] },
         "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
         "prevBalance": { "type": "number" },
         "newBalance": { "type": "number" },
         "description": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
-      "required": ["userId", "amount", "newBalance", "createdBy"]
+      "required": ["userId", "amount", "createdBy"]
     }
   },
   "firestore": {
