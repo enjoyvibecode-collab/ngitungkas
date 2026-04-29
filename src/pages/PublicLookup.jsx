@@ -46,9 +46,7 @@ export default function PublicLookup() {
     setStudent(null);
     
     try {
-      // 1. Find Student by NISN across all users in the system
-      // Note: In a real app, you might want to filter by orgId if you know it, 
-      // but for this multi-tenant app, we'll try to find the student directly.
+      // 1. Find Student by NISN
       const studentQuery = query(
         collection(db, 'users'), 
         where('nisn', '==', nisn.trim()),
@@ -61,10 +59,28 @@ export default function PublicLookup() {
         throw new Error("Data siswa dengan NISN tersebut tidak ditemukan.");
       }
 
-      const studentData = { id: studentSnap.docs[0].id, ...studentSnap.docs[0].data() };
+      const rawStudentData = { id: studentSnap.docs[0].id, ...studentSnap.docs[0].data() };
+      
+      // 2. Fetch Organization Name
+      const orgSnap = await getDoc(doc(db, 'organizations', rawStudentData.orgId));
+      const orgName = orgSnap.exists() ? orgSnap.data().name : 'Organisasi Pendidikan';
+
+      // 3. Fetch Real-time Balance from savings subcollection
+      const savingsRef = doc(db, 'organizations', rawStudentData.orgId, 'savings', rawStudentData.id);
+      const savingsDoc = await getDoc(savingsRef);
+      const savingsData = savingsDoc.exists() ? savingsDoc.data() : { balance: 0 };
+
+      const studentData = { 
+        ...rawStudentData, 
+        orgName,
+        actualBalance: Number(savingsData.balance) || 0,
+        pendingWithdrawal: !!savingsData.pendingWithdrawal,
+        pendingAmount: Number(savingsData.pendingAmount) || 0
+      };
+      
       setStudent(studentData);
 
-      // 2. Fetch Savings History (Logs)
+      // 4. Fetch Savings History (Logs)
       const savingsQuery = query(
         collection(db, 'organizations', studentData.orgId, 'savings_logs'),
         where('userId', '==', studentData.id),
@@ -72,9 +88,13 @@ export default function PublicLookup() {
         limit(50)
       );
       const savingsSnap = await getDocs(savingsQuery);
-      setSavingsHistory(savingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setSavingsHistory(savingsSnap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        amount: Number(doc.data().amount) || 0
+      })));
 
-      // 3. Fetch Bills
+      // 5. Fetch Bills
       const billsQuery = query(
         collection(db, 'organizations', studentData.orgId, 'student_bills'),
         where('studentId', '==', studentData.id),
@@ -98,10 +118,11 @@ export default function PublicLookup() {
   const exportSavings = () => {
     if (!student) return;
     const wsData = savingsHistory.map(h => ({
-      'Tanggal': h.date,
-      'Tipe': h.amount >= 0 ? 'Setoran' : 'Penarikan',
-      'Jumlah': Math.abs(h.amount),
-      'Keterangan': h.note || '-'
+      'Tanggal': h.createdAt?.toDate ? h.createdAt.toDate().toLocaleString('id-ID') : '-',
+      'Tipe': h.type === 'deposit' ? 'Setoran' : 'Penarikan',
+      'Jumlah': h.amount,
+      'Status': h.status === 'pending' ? 'Menunggu Persetujuan' : 'Sukses',
+      'Keterangan': h.description || '-'
     }));
 
     const ws = XLSX.utils.json_to_sheet(wsData);
@@ -196,9 +217,10 @@ export default function PublicLookup() {
                 <div className="w-24 h-24 rounded-[2rem] bg-indigo-600 flex items-center justify-center font-black text-3xl text-white shadow-xl shadow-indigo-200 shrink-0">
                   {student.displayName?.charAt(0)}
                 </div>
-                <div className="text-center sm:text-left space-y-2 relative">
+                <div className="text-center sm:text-left space-y-1 relative">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600 mb-1">{student.orgName}</p>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight">{student.displayName}</h2>
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-2">
                     <Badge variant="brand" className="px-4 py-1.5">{student.className || 'Tanpa Kelas'}</Badge>
                     <div className="flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-[11px] font-black uppercase text-slate-500 tracking-widest">
                       <Calendar className="w-3 h-3" />
@@ -212,11 +234,22 @@ export default function PublicLookup() {
                 <div className="absolute -left-4 -top-4 w-24 h-24 bg-white/10 rounded-full" />
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-80 mb-2">Total Tabungan</p>
-                  <h3 className="text-3xl font-black leading-none">{formatIDR(student.savingsBalance)}</h3>
+                  <h3 className="text-3xl font-black leading-none">{formatIDR(student.actualBalance)}</h3>
                 </div>
-                <div className="mt-6 flex items-center gap-2 p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
-                  <Wallet className="w-4 h-4" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Saldo Aktif</span>
+                <div className="mt-6 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
+                    <Wallet className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Saldo Aktif</span>
+                  </div>
+                  {student.pendingWithdrawal && (
+                    <div className="flex items-center gap-2 p-3 bg-amber-500/20 border border-amber-500/30 rounded-2xl backdrop-blur-sm text-amber-200">
+                      <AlertCircle className="w-4 h-4" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase tracking-widest leading-none mb-1 text-amber-300">Penarikan Pending</span>
+                        <span className="text-[10px] font-bold">-{formatIDR(student.pendingAmount)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>
@@ -297,20 +330,29 @@ export default function PublicLookup() {
                         savingsHistory.map((h) => (
                           <tr key={h.id} className="hover:bg-slate-50/30 transition-colors">
                             <td className="px-6 py-4">
-                              <p className="text-sm font-black text-slate-900">{h.date}</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge variant={h.amount >= 0 ? 'success' : 'danger'}>
-                                {h.amount >= 0 ? 'Setoran' : 'Tarik'}
-                              </Badge>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className={cn("text-sm font-black", h.amount >= 0 ? 'text-emerald-600' : 'text-rose-600')}>
-                                {h.amount >= 0 ? '+' : ''}{formatIDR(h.amount)}
+                              <p className="text-sm font-black text-slate-900">
+                                {h.createdAt?.toDate ? h.createdAt.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                               </p>
                             </td>
                             <td className="px-6 py-4">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h.note || '-'}</p>
+                              <div className="flex flex-col gap-1">
+                                <Badge variant={h.type === 'deposit' ? 'success' : 'danger'}>
+                                  {h.type === 'deposit' ? 'Setoran' : 'Tarik'}
+                                </Badge>
+                                {h.status === 'pending' && (
+                                  <span className="text-[8px] font-black uppercase bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100 w-fit">
+                                    Pending Approval
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className={cn("text-sm font-black", h.type === 'deposit' ? 'text-emerald-600' : 'text-rose-600')}>
+                                {h.type === 'deposit' ? '+' : '-'}{formatIDR(h.amount)}
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h.description || '-'}</p>
                             </td>
                           </tr>
                         ))

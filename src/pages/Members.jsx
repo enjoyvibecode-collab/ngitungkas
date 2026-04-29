@@ -233,7 +233,7 @@ export default function Members() {
     const q = query(
       collection(db, 'users'),
       where('orgId', '==', profile.orgId),
-      limit(50)
+      limit(1000)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -502,7 +502,12 @@ export default function Members() {
           </div>
           <div className="px-5 py-3 bg-slate-900 text-white rounded-2xl flex items-center gap-3 shadow-lg shadow-slate-200">
             <Users className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-black uppercase tracking-widest">{filteredMembers.length} Siswa</span>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1">Total Terfilter</span>
+              <span className="text-xs font-black uppercase tracking-widest">
+                {filteredMembers.filter(m => m.role === 'member' || !m.role).length} Siswa • {filteredMembers.filter(m => ['admin', 'treasurer', 'staff', 'class_treasurer', 'teacher'].includes(m.role)).length} Staff
+              </span>
+            </div>
           </div>
         </div>
       </header>

@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   MessageCircle,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  PiggyBank
 } from 'lucide-react';
 import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -38,106 +39,71 @@ export default function Dashboard() {
     income: 0,
     expense: 0,
     members: 0,
-    todayIncome: 0,
-    todayExpense: 0,
-    trends: {
-      income: "0%",
-      expense: "0%",
-      balance: "0%"
-    }
+    totalSavings: 0,
+    classBalances: {}
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [members, setMembers] = useState([]);
-  const [unpaidMembers, setUnpaidMembers] = useState([]);
   const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     if (!profile?.orgId) return;
 
+    // Listen to Kas Kelas Transactions
     const qAll = query(
       collection(db, 'organizations', profile.orgId, 'transactions'),
       where('isDeleted', '==', false),
-      limit(1000)
+      limit(2000)
     );
 
     const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const yesterdayStart = todayStart - (24 * 60 * 60 * 1000);
       
       let totalIncome = 0;
       let totalExpense = 0;
-      let todayIncome = 0;
-      let todayExpense = 0;
-      let yesterdayIncome = 0;
-      let yesterdayExpense = 0;
+      const classBalances = {};
 
       const txs = snapshot.docs.map(doc => {
         const data = doc.data();
         const amount = Number(data.amount) || 0;
-        const txDate = data.date?.toDate()?.getTime() || 0;
+        const className = data.className || 'Global';
 
-        if (data.type === 'income') {
-          totalIncome += amount;
-          if (txDate >= todayStart) todayIncome += amount;
-          else if (txDate >= yesterdayStart && txDate < todayStart) yesterdayIncome += amount;
-        } else {
-          totalExpense += amount;
-          if (txDate >= todayStart) todayExpense += amount;
-          else if (txDate >= yesterdayStart && txDate < todayStart) yesterdayExpense += amount;
+        if (data.status === 'approved') {
+          if (data.type === 'income') {
+            totalIncome += amount;
+            classBalances[className] = (classBalances[className] || 0) + amount;
+          } else {
+            totalExpense += amount;
+            classBalances[className] = (classBalances[className] || 0) - amount;
+          }
         }
 
         return { id: doc.id, ...data, amount };
       });
-
-      // Calculate Trends
-      const calcTrend = (curr, prev) => {
-        if (prev === 0) return curr > 0 ? "+100%" : "0%";
-        const diff = ((curr - prev) / prev) * 100;
-        return (diff >= 0 ? "+" : "") + diff.toFixed(1) + "%";
-      };
 
       setStats(prev => ({
         ...prev,
         income: totalIncome,
         expense: totalExpense,
         balance: totalIncome - totalExpense,
-        todayIncome,
-        todayExpense,
-        trends: {
-          income: calcTrend(todayIncome, yesterdayIncome),
-          expense: calcTrend(todayExpense, yesterdayExpense),
-          balance: "+0.5%" // Synthetic placeholder for stability
-        }
+        classBalances
       }));
 
-      // Calculate 5-month aggregation for chart
+      // Chart aggregation
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
       const last5Months = [];
       for (let i = 4; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        last5Months.push({
-          month: months[d.getMonth()],
-          year: d.getFullYear(),
-          monthIdx: d.getMonth(),
-          income: 0,
-          expense: 0
-        });
+        last5Months.push({ month: months[d.getMonth()], year: d.getFullYear(), monthIdx: d.getMonth(), income: 0, expense: 0 });
       }
 
       txs.forEach(tx => {
-        if (!tx.date) return;
+        if (!tx.date || tx.status !== 'approved') return;
         const d = tx.date.toDate();
-        const month = d.getMonth();
-        const year = d.getFullYear();
-        
-        const chartIdx = last5Months.findIndex(m => m.monthIdx === month && m.year === year);
-        if (chartIdx !== -1) {
-          last5Months[chartIdx][tx.type] += tx.amount;
-        }
+        const chartIdx = last5Months.findIndex(m => m.monthIdx === d.getMonth() && m.year === d.getFullYear());
+        if (chartIdx !== -1) last5Months[chartIdx][tx.type] += tx.amount;
       });
-
       setChartData(last5Months);
 
       const sorted = [...txs].sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
@@ -146,47 +112,33 @@ export default function Dashboard() {
       handleFirestoreError(error, OperationType.LIST, `organizations/${profile.orgId}/transactions`);
     });
 
-    // Listen to members
+    // Listen to Student Savings
+    const qSavings = query(
+      collection(db, 'organizations', profile.orgId, 'savings'),
+      limit(1000)
+    );
+    const unsubscribeSavings = onSnapshot(qSavings, (snapshot) => {
+      const total = snapshot.docs.reduce((acc, doc) => acc + (Number(doc.data().balance) || 0), 0);
+      setStats(prev => ({ ...prev, totalSavings: total }));
+    });
+
+    // Listen to members (Only Students/Members)
     const qMembers = query(
       collection(db, 'users'),
       where('orgId', '==', profile.orgId),
-      limit(50)
+      where('role', 'in', ['member', 'student']),
+      limit(1000)
     );
-
-    let unsubscribePayments = null;
     const unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
-      const membersData = snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() }));
-      setMembers(membersData);
-      setStats(prev => ({ ...prev, members: snapshot.size }));
-      
-      // Fetch this month's payments to compute unpaid members
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-      const qPayments = query(
-        collection(db, 'organizations', profile.orgId, 'transactions'),
-        where('category', '==', 'Iuran Rutin'),
-        where('date', '>=', Timestamp.fromDate(startOfMonth)),
-        where('date', '<=', Timestamp.fromDate(endOfMonth)),
-        limit(500)
-      );
-
-      if (unsubscribePayments) unsubscribePayments();
-      unsubscribePayments = onSnapshot(qPayments, (snap) => {
-        const paidUids = snap.docs.map(d => d.data().memberId || d.data().userId);
-        const unpaid = membersData.filter(m => !paidUids.includes(m.uid || m.id));
-        setUnpaidMembers(unpaid);
-      });
-
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `users`);
+       const membersData = snapshot.docs.map(doc => ({ id: doc.id, uid: doc.id, ...doc.data() }));
+       setMembers(membersData);
+       setStats(prev => ({ ...prev, members: snapshot.size }));
     });
 
     return () => {
       unsubscribeAll();
+      unsubscribeSavings();
       unsubscribeMembers();
-      if (unsubscribePayments) unsubscribePayments();
     };
   }, [profile]);
 
@@ -365,33 +317,33 @@ export default function Dashboard() {
         {/* Main Stats Bento Row */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
           <StatCard 
-            title="Sisa Kas Organisasi" 
+            title="Total Kas Seluruh Kelas" 
             value={formatCurrency(stats.balance)} 
             icon={Wallet} 
-            trend={stats.trends.balance} 
-            isPositive 
+            trend={stats.income >= stats.expense ? "Surplus" : "Defisit"} 
+            isPositive={stats.income >= stats.expense} 
             variant="accent"
           />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 h-full">
             <StatCard 
-              title="Setoran Hari Ini" 
-              value={formatCurrency(stats.todayIncome)} 
-              icon={TrendingUp} 
-              trend={stats.trends.income} 
+              title="Total Tabungan Siswa" 
+              value={formatCurrency(stats.totalSavings)} 
+              icon={PiggyBank} 
+              trend="Aman" 
               isPositive 
             />
             <StatCard 
-              title="Penarikan Hari Ini" 
-              value={formatCurrency(stats.todayExpense)} 
-              icon={TrendingDown} 
-              trend={stats.trends.expense} 
-              isPositive={false} 
+              title="Total Siswa" 
+              value={`${stats.members} Orang`} 
+              icon={Users} 
+              trend="Aktif" 
+              isPositive 
             />
           </div>
         </div>
 
         {/* Chart Card */}
-        <Card title="Pertumbuhan Kas" subtitle="Analisis Mutasi 5 Bulan Terakhir" className="col-span-12 lg:col-span-8">
+        <Card title="Pertumbuhan Kas Kelas" subtitle="Mutasi 5 Bulan Terakhir" className="col-span-12 lg:col-span-8">
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
@@ -420,121 +372,36 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Members Quick List */}
+        {/* Classes Breakdown */}
         <Card 
-          title="Data Siswa Terakhir" 
-          className="col-span-12 lg:col-span-6"
-          action={
-            canManageData && (
-              <Link to="/members" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
-                Lihat Semua Siswa
-              </Link>
-            )
-          }
+          title="Rincian Saldo per Kelas" 
+          subtitle="Saldo Kas Terkumpul Tiap Unit"
+          className="col-span-12 lg:col-span-7"
         >
-           <div className="space-y-3">
-             {members.length > 0 ? members.slice(0, 4).map(member => (
-               <div key={member.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <img src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
-                    <div>
-                      <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
-                      <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
-                        {member.className || 'Tanpa Kelas'} • NISN: {member.nisn || '-'}
-                      </div>
-                    </div>
-                  </div>
-                  <span className={cn(
-                    "text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase",
-                    member.orgId ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 border-slate-200"
-                  )}>
-                    Joined
-                  </span>
-               </div>
-             )) : (
-               <p className="text-center text-xs text-slate-400 py-4 font-bold uppercase tracking-widest">Belum ada data siswa</p>
-             )}
-           </div>
-        </Card>
-
-        {/* Needs Follow Up Widget */}
-        <Card 
-          title="Belum Menabung" 
-          subtitle="Siswa Belum Iuran Bulan Ini"
-          className="col-span-12 lg:col-span-6"
-          action={
-            <Link to="/billing" className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700">
-              Lihat Detail
-            </Link>
-          }
-        >
-          <div className="space-y-3">
-            {unpaidMembers.length > 0 ? unpaidMembers.slice(0, 4).map(member => (
-              <div key={member.id} className="flex items-center justify-between p-3 bg-rose-50/50 rounded-2xl border border-rose-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-xs border border-rose-200">
-                    {(member.displayName || 'U').charAt(0)}
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-800">{member.displayName}</div>
-                    <div className="text-[9px] text-rose-600 uppercase font-bold tracking-wider">Belum Lunas</div>
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {Object.entries(stats.classBalances).length > 0 ? Object.entries(stats.classBalances).map(([className, balance]) => (
+              <div key={className} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center group hover:bg-white hover:shadow-md transition-all">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Kelas</p>
+                  <p className="text-lg font-black text-slate-900">{className}</p>
                 </div>
-                {canManageData && (
-                  <button 
-                    onClick={() => {
-                      const msg = `Halo ${member.displayName}, pengingat dari NgitungKas untuk iuran bulan ini. Mohon segera diselesaikan ya. Terima kasih!`;
-                      window.open(`https://wa.me/${member.phone || ''}?text=${encodeURIComponent(msg)}`);
-                    }}
-                    className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Saldo Kas</p>
+                  <p className={cn("text-sm font-black", balance >= 0 ? "text-indigo-600" : "text-rose-600")}>
+                    {formatCurrency(balance)}
+                  </p>
+                </div>
               </div>
             )) : (
-              <div className="flex flex-col items-center py-6 text-emerald-500">
-                <CheckCircle2 className="w-8 h-8 mb-2" />
-                <p className="text-[10px] font-black uppercase tracking-widest">Semua Anggota Lunas!</p>
+              <div className="col-span-2 py-10 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Belum ada mutasi kas kelas</p>
               </div>
-            )}
-            {unpaidMembers.length > 4 && (
-              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest pt-2">
-                +{unpaidMembers.length - 4} anggota lainnya
-              </p>
             )}
           </div>
         </Card>
 
-        <Card title="Aktivitas Terbaru" className="col-span-12 lg:col-span-12" variant="dark"
-          action={
-            isAdmin && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={async () => {
-                  if (confirm("⚠️ PERINGATAN: Apakah Bapak/Ibu yakin ingin MENGHAPUS SEMUA transaksi? Ini akan meriset saldo kas organisasi Anda. Tindakan ini tidak dapat dibatalkan.")) {
-                    try {
-                      const q = query(collection(db, 'organizations', profile.orgId, 'transactions'), where('isDeleted', '==', false));
-                      const snap = await getDocs(query(collection(db, 'organizations', profile.orgId, 'transactions')));
-                      const batch = writeBatch(db);
-                      snap.docs.forEach(doc => {
-                        batch.update(doc.ref, { isDeleted: true, updatedAt: serverTimestamp() });
-                      });
-                      await batch.commit();
-                      alert("Data berhasil dibersihkan (ditandai terhapus).");
-                    } catch (err) {
-                      alert("Gagal membersihkan data: " + err.message);
-                    }
-                  }
-                }}
-                className="bg-white/5 border-white/10 text-rose-400 hover:bg-rose-500/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
-              >
-                Reset Semua Transaksi
-              </Button>
-            )
-          }
-        >
+        {/* Recent Activity */}
+        <Card title="Aktivitas Kas Kelas" className="col-span-12 lg:col-span-5" variant="dark">
           <div className="space-y-4">
             {recentTransactions.length > 0 ? (
               recentTransactions.map((tx) => (
@@ -547,12 +414,12 @@ export default function Dashboard() {
                       {tx.type === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-white truncate w-40">{tx.description}</p>
-                      <p className="text-[10px] text-slate-400 font-medium uppercase">{formatDate(tx.date)}</p>
+                      <p className="text-sm font-bold text-white truncate w-32">{tx.description}</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">{tx.className || 'Global'}</p>
                     </div>
                   </div>
                   <p className={cn(
-                    "text-sm font-black",
+                    "text-sm font-black text-right",
                     tx.type === 'income' ? "text-emerald-400" : "text-rose-400"
                   )}>
                     {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
@@ -561,12 +428,13 @@ export default function Dashboard() {
               ))
             ) : (
               <div className="text-center py-8">
-                <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">No Records Found</p>
+                <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">Belum ada riwayat</p>
               </div>
             )}
           </div>
         </Card>
       </div>
+
     </div>
   );
 }

@@ -37,6 +37,7 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
   
   const [confirmModal, setConfirmModal] = useState({
@@ -69,6 +70,9 @@ export default function Transactions() {
   const filteredTransactions = transactions.filter(tx => {
     const matchesFilter = filter === 'all' ? true : tx.type === filter;
     if (!matchesFilter) return false;
+
+    const matchesClassFilter = classFilter === 'all' ? true : tx.className === classFilter;
+    if (!matchesClassFilter) return false;
 
     // Role based filtering for Staff (TU) and Teacher
     if (profile?.role === 'staff' && profile?.assignedGrade) {
@@ -149,9 +153,9 @@ export default function Transactions() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-300 pb-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Arsip Kas Sekolah</h1>
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Arsip Kas Kelas</h1>
           <p className="text-slate-500 font-medium uppercase text-xs tracking-widest mt-1">
-            Riwayat Digital • {profile?.orgName || 'Sekolah'}
+            Manajemen Saldo Unit Kelas • {profile?.orgName || 'Sekolah'}
           </p>
         </div>
         
@@ -159,9 +163,9 @@ export default function Transactions() {
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4 mr-2" /> Export
           </Button>
-          {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher') && (
+          {(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher' || profile?.role === 'class_treasurer') && (
             <Button size="sm" variant="brand" onClick={() => setIsModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Catat Kas
+              <Plus className="w-4 h-4 mr-2" /> Catat Kas Baru
             </Button>
           )}
         </div>
@@ -179,6 +183,17 @@ export default function Transactions() {
           </div>
           
           <div className="flex items-center space-x-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+            <select 
+              value={classFilter} 
+              onChange={(e) => setClassFilter(e.target.value)}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-slate-900"
+            >
+              <option value="all">Semua Kelas</option>
+              {['7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K'].map(c => (
+                <option key={c} value={c}>Kelas {c}</option>
+              ))}
+            </select>
+            <div className="h-6 w-px bg-slate-200 mx-2" />
             <FilterButton active={filter === 'all'} onClick={() => setFilter('all')}>Semua</FilterButton>
             <FilterButton active={filter === 'income'} onClick={() => setFilter('income')}>Masuk</FilterButton>
             <FilterButton active={filter === 'expense'} onClick={() => setFilter('expense')}>Keluar</FilterButton>
@@ -208,7 +223,12 @@ export default function Transactions() {
                         {tx.type === 'income' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900">{tx.description}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-slate-900">{tx.description}</p>
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                             Kelas {tx.className || 'Global'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2">
                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">REF: {tx.id.slice(0, 8)}</p>
                            {tx.status === 'pending' && (
@@ -379,11 +399,8 @@ export default function Transactions() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Target Kas Kelas</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block tracking-widest">Pilih Unit Kelas</label>
                   <select name="className" required className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-slate-900 outline-none font-bold text-slate-700 appearance-none">
-                    {(profile?.role === 'admin' || profile?.role === 'treasurer') && (
-                      <option value="Global">Kas Umum / Sekolah</option>
-                    )}
                     {['7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7J', '7K', '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8J', '8K', '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H', '9I', '9J', '9K']
                       .filter(c => {
                         if (profile?.role === 'staff' && profile?.assignedGrade) {

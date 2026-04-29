@@ -10,7 +10,6 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
-import Billing from './pages/Billing';
 import Savings from './pages/Savings';
 import Members from './pages/Members';
 import ActivityLogs from './pages/ActivityLogs';
@@ -51,7 +50,6 @@ function AppContent() {
             <Routes>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/transactions" element={<Transactions />} />
-              <Route path="/billing" element={<Billing />} />
               <Route path="/savings" element={<Savings />} />
               <Route path="/members" element={<Members />} />
               <Route path="/activity" element={<ActivityLogs />} />

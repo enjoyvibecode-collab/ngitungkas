@@ -26,7 +26,6 @@ export function Navbar() {
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Kas Kelas', path: '/transactions', icon: Receipt },
-    { name: 'Tagihan Sekolah', path: '/billing', icon: CreditCard },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
     ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'class_treasurer' ? [
       { name: 'Data Siswa & Kelas', path: '/members', icon: Users },

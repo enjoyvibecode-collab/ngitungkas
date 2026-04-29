@@ -54,8 +54,8 @@ export default function Landing() {
             <span className="text-slate-300">SMPN 1 Manonjaya.</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
-            Sistem Tabungan & Iuran Digital untuk {profile?.orgName || 'Sekolah Anda'}. <br className="hidden md:block"/>
-            Transparansi keuangan sekolah dalam satu genggaman.
+            Sistem Tabungan Siswa & Manajemen Kas Kelas Digital. <br className="hidden md:block"/>
+            Transparansi keuangan kelas dalam satu genggaman.
           </p>
         </motion.div>
 
