@@ -230,7 +230,8 @@ export default function Members() {
 
     const q = query(
       collection(db, 'users'),
-      where('orgId', '==', profile.orgId)
+      where('orgId', '==', profile.orgId),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {

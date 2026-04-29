@@ -49,7 +49,8 @@ export default function Dashboard() {
 
     const qAll = query(
       collection(db, 'organizations', profile.orgId, 'transactions'),
-      where('isDeleted', '==', false)
+      where('isDeleted', '==', false),
+      limit(500)
     );
 
     const unsubscribeAll = onSnapshot(qAll, (snapshot) => {
@@ -92,7 +93,8 @@ export default function Dashboard() {
     // Listen to members
     const qMembers = query(
       collection(db, 'users'),
-      where('orgId', '==', profile.orgId)
+      where('orgId', '==', profile.orgId),
+      limit(50)
     );
 
     let unsubscribePayments = null;

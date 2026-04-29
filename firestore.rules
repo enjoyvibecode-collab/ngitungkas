@@ -1,196 +1,161 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Default Deny
+    // 0. Default Deny - Global Safety Net (Pillar 0)
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Phase 3: Primitives
+    // Phase 3: Primitives & Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // ID Poisoning Guard (Pillar 3)
     function isValidId(id) { 
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
     }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-    function isSignedIn() { return request.auth != null; }
-    function isVerified() { 
-      // Basic check: must be signed in. Email verification is ideal but sometimes Google returns false for newly created accounts in certain regions or configurations.
-      return isSignedIn(); 
+
+    // Relational Helpers - Hardened
+    function getProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
-    // Relational Helpers
-    function getProfile() {
-      let profilePath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(profilePath) ? get(profilePath).data : null;
-    }
     function isOrgMember(orgId) {
       let p = getProfile();
-      return isSignedIn() && p != null && p.orgId != null && p.orgId == orgId;
+      return isSignedIn() && p != null && p.orgId == orgId;
     }
+    
     function isAdmin(orgId) {
       let p = getProfile();
-      return isOrgMember(orgId) && p.role == 'admin';
+      return isOrgMember(orgId) && p.get('role', 'member') == 'admin';
     }
+    
     function isTreasurer(orgId) {
       let p = getProfile();
-      return isOrgMember(orgId) && p.role == 'treasurer';
+      return isOrgMember(orgId) && p.get('role', 'member') == 'treasurer';
     }
+    
     function isTeacher(orgId) {
       let p = getProfile();
-      return isOrgMember(orgId) && p.role == 'teacher';
-    }
-    function isFinanceRole(orgId) {
-      return isAdmin(orgId) || isTreasurer(orgId);
-    }
-    function isAdministrativeRole(orgId) {
-      return isFinanceRole(orgId) || isTeacher(orgId);
+      return isOrgMember(orgId) && (p.get('role', 'member') == 'teacher' || p.get('role', 'member') == 'staff');
     }
 
-    // 1. Users Collection
+    function isFinanceRole(orgId) {
+      let p = getProfile();
+      return isOrgMember(orgId) && (p.get('role', 'member') == 'admin' || p.get('role', 'member') == 'treasurer');
+    }
+
+    function isAdministrativeRole(orgId) {
+      let p = getProfile();
+      let role = p.get('role', 'member');
+      return isOrgMember(orgId) && (role == 'admin' || role == 'treasurer' || role == 'teacher' || role == 'staff' || role == 'class_treasurer');
+    }
+
+    // 1. Users Collection - Identity Integrity (Pillar 2, 6)
     match /users/{userId} {
-      function isValidUserSchema(data) {
-        let role = data.get('role', 'member');
-        let email = data.get('email', '');
-        let displayName = data.get('displayName', '');
-        
-        return (displayName is string && displayName.size() <= 100) &&
-               (email is string) &&
-               (role in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
-               (data.get('orgId', null) == null || (data.get('orgId', '') is string && data.get('orgId', '').size() <= 64)) &&
-               (data.get('orgName', null) == null || (data.get('orgName', '') is string && data.get('orgName', '').size() <= 100)) &&
+      function isValidUser(data) {
+        return (data.displayName is string && data.displayName.size() <= 100) &&
+               (data.email is string) &&
+               (data.get('role', 'member') in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
+               (data.get('orgId', null) == null || isValidId(data.get('orgId', ''))) &&
                (data.get('uid', '') == userId);
       }
 
-      // Allow users to read their own profile
-      allow get: if isSignedIn() && (request.auth.uid == userId);
+      allow get: if isSignedIn() && (request.auth.uid == userId || isOrgMember(resource.data.get('orgId', null)));
       
-      // Allow members of the same org to see each other
-      allow get: if isSignedIn() && (resource != null && isOrgMember(resource.data.get('orgId', null)));
-      
-      // Allow users to search for their own manual registration record by email
+      // Secure List Queries (Pillar 8) - Force limit and relational check
       allow list: if isSignedIn() && (
-        (request.query.limit <= 20) && 
-        (resource.data.get('email', '') == request.auth.token.email || isOrgMember(resource.data.get('orgId', '')))
-      ); 
-      
-      allow create: if isSignedIn() && (
-        // Case 1: Self-registration (Google Login)
-        (request.auth.uid == userId && isValidUserSchema(incoming())) ||
-        // Case 2: Administrative creation
-        (isFinanceRole(incoming().get('orgId', '')) && incoming().get('role', 'member') in ['member', 'staff', 'class_treasurer'])
-      );
-      
-      allow update: if isSignedIn() && isValidUserSchema(incoming()) && (
-        // Case 1: User updating their own profile
-        (request.auth.uid == userId && (
-          // Personal info update
-          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName']) ||
-          // First-time setup (Linking to an Organization)
-          (existing().get('orgId', null) == null && incoming().get('role', 'member') in ['admin', 'member'] && incoming().get('orgId', null) != null)
-        )) ||
-        // Case 2: Administrative Updates
-        (
-          resource != null && request.auth.uid != userId && 
-          isOrgMember(resource.data.get('orgId', null)) &&
-          (
-            // ADMIN: Full control except immutable system keys
-            (isAdmin(resource.data.get('orgId', null)) && 
-             incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false) ||
-            
-            // TREASURER/STAFF
-            (isFinanceRole(resource.data.get('orgId', null)) && 
-             incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'parentPhone', 'photoURL', 'nisn', 'className', 'assignedGrade', 'orgName']) &&
-             incoming().get('role', 'member') == existing().get('role', 'member') && 
-             incoming().get('orgId', null) == existing().get('orgId', null))
-          )
+        request.query.limit <= 50 && (
+          resource.data.email == request.auth.token.email || 
+          isOrgMember(resource.data.get('orgId', 'unknown'))
         )
       );
       
-      // Allow cleanup after linking
-      allow delete: if isSignedIn() && (
-        (resource.data.isManualCreated == true && resource.data.email == request.auth.token.email) ||
-        (isAdmin(resource.data.orgId))
+      allow create: if isSignedIn() && isValidUser(incoming()) && (
+        (request.auth.uid == userId) ||
+        (isFinanceRole(incoming().get('orgId', '')))
       );
+      
+      allow update: if isSignedIn() && isValidUser(incoming()) && (
+        // Self Update - Restricted Fields (Pillar 4)
+        (request.auth.uid == userId && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName']) ||
+          (existing().get('orgId', null) == null && incoming().get('orgId', null) != null)
+        )) ||
+        // Admin Update
+        (isFinanceRole(resource.data.get('orgId', '')) && 
+         incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false)
+      );
+
+      allow delete: if isSignedIn() && isAdmin(resource.data.get('orgId', ''));
     }
 
-    // 2. Organization subcollections
+    // 2. Organizations & Subcollections - Relational Sync (Pillar 1)
     match /organizations/{orgId} {
-      allow get, create: if isSignedIn();
-
-      // Transactions
+      // Organization ID must be valid
+      allow get: if isSignedIn() && isValidId(orgId);
+      allow create: if isSignedIn() && isValidId(orgId);
+      
+      // Transactions - Action-Based Update Pattern (Pillar 4)
       match /transactions/{txId} {
         function isValidTransaction(data) {
           return data.amount is number && data.amount >= 0 &&
                  data.type in ['income', 'expense'] &&
-                 (data.title is string || data.description is string) &&
-                 data.createdBy == request.auth.uid;
+                 (data.get('description', '') is string && data.get('description', '').size() <= 500) &&
+                 (data.get('orgId', '') == orgId);
         }
 
-        allow read: if isOrgMember(orgId);
-        allow create: if isAdministrativeRole(orgId) && isValidId(txId) && isValidTransaction(incoming());
-        allow update: if isAdministrativeRole(orgId) && isValidTransaction(incoming());
+        allow get: if isOrgMember(orgId);
+        allow list: if isOrgMember(orgId) && (request.query.limit <= 500);
+        
+        allow create: if isAdministrativeRole(orgId) && 
+                         isValidId(txId) && 
+                         isValidTransaction(incoming()) &&
+                         incoming().createdBy == request.auth.uid;
+                         
+        allow update: if isAdministrativeRole(orgId) && 
+                         isValidTransaction(incoming()) && (
+                           // Logic for soft delete or minor metadata changes
+                           incoming().diff(existing()).affectedKeys().hasOnly(['isDeleted', 'updatedAt', 'updatedBy', 'description', 'category', 'amount', 'type'])
+                         );
       }
 
-      // Savings
+      // Savings - PII Isolation logic (Pillar 6)
       match /savings/{userId} {
-        function isValidSaving(data) {
-          return data.userId is string && data.balance is number;
-        }
-
         allow get: if isOrgMember(orgId) && (request.auth.uid == userId || isAdministrativeRole(orgId));
         allow list: if isAdministrativeRole(orgId);
-        allow write: if isAdministrativeRole(orgId) && isValidSaving(incoming());
+        allow write: if isAdministrativeRole(orgId) && incoming().userId == userId;
       }
 
       // Activity Logs
       match /activity_logs/{logId} {
-        function isValidActivityLog(data) {
-          return data.actorId == request.auth.uid &&
-                 data.orgId == orgId &&
-                 data.action in ['promote', 'demote', 'remove', 'role_change', 'savings', 'transaction', 'contribution', 'reminder_sent'];
-        }
-
         allow read: if isOrgMember(orgId);
-        allow create: if isAdministrativeRole(orgId) && isValidActivityLog(incoming());
+        allow create: if isAdministrativeRole(orgId) && incoming().actorId == request.auth.uid;
       }
 
       // Savings Logs
       match /savings_logs/{logId} {
-        function isValidLog(data) {
-          return data.userId is string &&
-                 data.type in ['deposit', 'withdraw'] &&
-                 data.amount is number && 
-                 data.createdBy == request.auth.uid;
-        }
-
         allow read: if isOrgMember(orgId) && (request.auth.uid == resource.data.userId || isAdministrativeRole(orgId));
-        allow create: if isAdministrativeRole(orgId) && isValidLog(incoming());
-      }
-      
-      // Contributions (Future use or explicit request)
-      match /contributions/{userId} {
-        allow read: if isOrgMember(orgId);
-        allow write: if isFinanceRole(orgId);
+        allow create: if isAdministrativeRole(orgId) && incoming().createdBy == request.auth.uid;
       }
 
-      // Billing Types (Master Tagihan)
       match /billing_types/{billId} {
         allow read: if isOrgMember(orgId);
-        allow write: if isFinanceRole(orgId) && isValidId(billId);
-      }
-
-      // Student Bills (Individual Tagihan per Siswa)
-      match /student_bills/{docId} {
-        allow read: if isOrgMember(orgId) && (resource == null || request.auth.uid == resource.data.studentId || isAdministrativeRole(orgId));
-        allow list: if isOrgMember(orgId);
         allow write: if isFinanceRole(orgId);
       }
 
-      // Payment Logs (Riwayat Pembayaran Tagihan)
+      match /student_bills/{docId} {
+        allow read: if isOrgMember(orgId) && (request.auth.uid == resource.data.studentId || isAdministrativeRole(orgId));
+        allow list: if isOrgMember(orgId) && (request.query.limit <= 200);
+        allow write: if isFinanceRole(orgId);
+      }
+
       match /payment_logs/{logId} {
         allow read: if isOrgMember(orgId);
-        allow create: if isFinanceRole(orgId) && isValidId(logId);
+        allow create: if isFinanceRole(orgId);
       }
     }
   }
 }
+

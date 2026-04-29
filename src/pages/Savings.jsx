@@ -52,7 +52,8 @@ export default function Savings() {
       // Listen to current balances
       const q = query(
         collection(db, 'organizations', profile.orgId, 'savings'),
-        orderBy('balance', 'desc')
+        orderBy('balance', 'desc'),
+        limit(200)
       );
       unsubscribeSavings = onSnapshot(q, (snapshot) => {
         const stats = snapshot.docs.map(doc => ({ 
@@ -71,7 +72,8 @@ export default function Savings() {
       // Listen to organization members
       const qMembers = query(
         collection(db, 'users'),
-        where('orgId', '==', profile.orgId)
+        where('orgId', '==', profile.orgId),
+        limit(50)
       );
       unsubscribeMembers = onSnapshot(qMembers, (snapshot) => {
         const users = snapshot.docs.map(doc => ({ 

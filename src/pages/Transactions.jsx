@@ -50,7 +50,8 @@ export default function Transactions() {
     const q = query(
       collection(db, 'organizations', profile.orgId, 'transactions'),
       where('isDeleted', '==', false),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc'),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -253,6 +254,7 @@ export default function Transactions() {
                   date: serverTimestamp(),
                   createdBy: profile?.uid,
                   creatorName: profile?.displayName,
+                  orgId: profile.orgId,
                   updatedAt: null,
                   updatedBy: null,
                   isDeleted: false,
