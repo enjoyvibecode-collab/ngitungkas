@@ -27,6 +27,9 @@ export function Navbar() {
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Kas Kelas', path: '/transactions', icon: Receipt },
     { name: 'Tabungan', path: '/savings', icon: PiggyBank },
+    ...(profile?.role === 'admin' || profile?.role === 'treasurer' ? [
+      { name: 'Manajemen Dana', path: '/operational', icon: CreditCard },
+    ] : []),
     ...(profile?.role === 'admin' || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'class_treasurer' ? [
       { name: 'Data Siswa & Kelas', path: '/members', icon: Users },
     ] : []),

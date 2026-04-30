@@ -13,6 +13,8 @@ import {
   doc, 
   serverTimestamp, 
   getDoc,
+  updateDoc,
+  increment,
   limit 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -194,6 +196,16 @@ export default function Savings() {
       });
 
       await batch.commit();
+      
+      // Update Staff Physical Cash Balance (Cash on Hand)
+      if (profile?.role === 'staff' || profile?.role === 'treasurer') {
+        const staffRef = doc(db, 'users', profile.uid);
+        await updateDoc(staffRef, {
+          cashOnHand: increment(isWithdraw ? -amount : amount),
+          updatedAt: serverTimestamp()
+        });
+      }
+
       setIsModalOpen(false);
     } catch (err) {
       console.error("Savings transaction failed:", err);

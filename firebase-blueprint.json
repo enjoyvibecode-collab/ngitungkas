@@ -9,14 +9,31 @@
         "displayName": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "treasurer", "teacher", "member"] },
+        "role": { "type": "string", "enum": ["admin", "treasurer", "staff", "student"] },
         "orgId": { "type": "string" },
+        "assignedGrade": { "type": "number", "description": "Specific grade level this staff manages (7, 8, 9)" },
+        "cashOnHand": { "type": "number", "description": "Current physical money held by this staff member" },
         "className": { "type": "string" },
         "nisn": { "type": "string" },
         "parentPhone": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "orgId", "role"]
+    },
+    "OperationalTransfer": {
+      "title": "Operational Fund Transfer",
+      "description": "Record of funds transferred between Treasurer and Staff.",
+      "type": "object",
+      "properties": {
+        "fromId": { "type": "string" },
+        "toId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["topup", "settlement"] },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromId", "toId", "amount", "type"]
     },
     "Transaction": {
       "title": "Cash Transaction",
@@ -86,6 +103,10 @@
     "/organizations/{orgId}/savings_logs/{logId}": {
       "schema": "SavingLog",
       "description": "Audit trail for all savings operations."
+    },
+    "/organizations/{orgId}/operational_transfers/{transferId}": {
+      "schema": "OperationalTransfer",
+      "description": "Ledger for funds distribution to staff."
     }
   }
 }

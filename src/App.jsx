@@ -14,6 +14,7 @@ import Savings from './pages/Savings';
 import Members from './pages/Members';
 import ActivityLogs from './pages/ActivityLogs';
 import PublicLookup from './pages/PublicLookup';
+import Operational from './pages/Operational';
 import { Navbar } from './components/Navbar';
 
 function AppContent() {
@@ -51,6 +52,7 @@ function AppContent() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/savings" element={<Savings />} />
+              <Route path="/operational" element={<Operational />} />
               <Route path="/members" element={<Members />} />
               <Route path="/activity" element={<ActivityLogs />} />
               <Route path="/" element={<Navigate to="/dashboard" />} />

@@ -49,7 +49,7 @@ service cloud.firestore {
     function isAdministrativeRole(orgId) {
       let p = getProfile();
       let role = p.get('role', 'member');
-      return isOrgMember(orgId) && (role == 'admin' || role == 'treasurer' || role == 'teacher' || role == 'staff' || role == 'class_treasurer');
+      return isOrgMember(orgId) && (role == 'admin' || role == 'treasurer' || role == 'staff');
     }
 
     // 1. Users Collection - Identity Integrity (Pillar 2, 6)
@@ -57,7 +57,7 @@ service cloud.firestore {
       function isValidUser(data) {
         return (data.get('displayName', '') is string && data.get('displayName', '').size() <= 100) &&
                (data.get('email', '') is string) &&
-               (data.get('role', 'member') in ['admin', 'treasurer', 'staff', 'class_treasurer', 'member']) &&
+               (data.get('role', 'member') in ['admin', 'treasurer', 'staff', 'student', 'member']) &&
                (data.get('orgId', null) == null || isValidId(data.get('orgId', ''))) &&
                (data.get('uid', '') == userId);
       }
@@ -81,15 +81,23 @@ service cloud.firestore {
         (isAdministrativeRole(incoming().get('orgId', '')))
       );
       
-      allow update: if isSignedIn() && isValidUser(incoming()) && (
+      allow update: if isSignedIn() && (
         // Self Update - Restricted Fields (Pillar 4)
         (request.auth.uid == userId && (
           incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phone', 'parentPhone', 'className', 'nisn', 'claimedAt', 'isManualCreated', 'orgName', 'orgId', 'role']) ||
           (existing().get('orgId', null) == null && incoming().get('orgId', null) != null)
         )) ||
         // Admin Update
-        (isAdministrativeRole(resource.data.get('orgId', '')) && 
-         incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false)
+        (isAdministrativeRole(existing().get('orgId', '')) && 
+          (
+            // General Profile update
+            incoming().diff(existing()).affectedKeys().hasAny(['uid', 'email']) == false ||
+            // Cash management specifically
+            incoming().diff(existing()).affectedKeys().hasOnly(['cashOnHand', 'updatedAt'])
+          )
+        ) ||
+        // Staff managing their own cash through transactions
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['cashOnHand', 'updatedAt']))
       );
 
       allow delete: if isSignedIn() && (
@@ -163,6 +171,20 @@ service cloud.firestore {
         allow list: if isOrgMember(orgId) && request.query.limit <= 100;
         allow get: if isOrgMember(orgId);
         allow create: if isFinanceRole(orgId);
+      }
+
+      match /operational_transfers/{transferId} {
+        function isValidTransfer(data) {
+          return data.amount is number && data.amount > 0 &&
+                 data.type in ['topup', 'settlement'] &&
+                 data.status in ['pending', 'completed'];
+        }
+        allow read: if isAdministrativeRole(orgId);
+        allow create: if isFinanceRole(orgId) && isValidTransfer(incoming());
+        allow update: if isAdministrativeRole(orgId) && (
+          // Allowing staff to mark as completed or treasurer to update
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        );
       }
     }
   }

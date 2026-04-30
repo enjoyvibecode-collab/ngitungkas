@@ -32,22 +32,39 @@ import {
 export default function Dashboard() {
   const { profile, user } = useAuth();
   const isAdmin = profile?.role === 'admin';
-  const canManageData = isAdmin || profile?.role === 'treasurer' || profile?.role === 'staff' || profile?.role === 'teacher';
+  const isTreasurer = profile?.role === 'treasurer';
+  const isStaff = profile?.role === 'staff';
+  const canManageData = isAdmin || isTreasurer || isStaff;
+  
   const [stats, setStats] = useState({
     balance: 0,
     income: 0,
     expense: 0,
     members: 0,
     totalSavings: 0,
-    classBalances: {}
+    classBalances: {},
+    staffBalances: []
   });
+  
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [chartData, setChartData] = useState([]);
   const [members, setMembers] = useState([]);
+  const [staffList, setStaffList] = useState([]);
   const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     if (!profile?.orgId) return;
+
+    // Listen to All Staff (for treasurer/admin)
+    const qStaff = query(
+      collection(db, 'users'),
+      where('orgId', '==', profile.orgId),
+      where('role', '==', 'staff')
+    );
+    const unsubscribeStaff = onSnapshot(qStaff, (snapshot) => {
+      const staff = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setStaffList(staff);
+    });
 
     // Listen to Kas Kelas Transactions
     const qAll = query(
@@ -135,6 +152,7 @@ export default function Dashboard() {
     });
 
     return () => {
+      unsubscribeStaff();
       unsubscribeAll();
       unsubscribeSavings();
       unsubscribeMembers();
@@ -316,14 +334,25 @@ export default function Dashboard() {
       <div className="grid grid-cols-12 gap-4">
         {/* Main Stats Bento Row */}
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
-          <StatCard 
-            title="Total Kas Seluruh Kelas" 
-            value={formatCurrency(stats.balance)} 
-            icon={Wallet} 
-            trend={stats.income >= stats.expense ? "Surplus" : "Defisit"} 
-            isPositive={stats.income >= stats.expense} 
-            variant="accent"
-          />
+          {isStaff ? (
+            <StatCard 
+              title="Saldo Tunai Pegangan (TU)" 
+              value={formatCurrency(profile?.cashOnHand || 0)} 
+              icon={Wallet} 
+              trend="Fisik di Box" 
+              isPositive 
+              variant="accent"
+            />
+          ) : (
+            <StatCard 
+              title="Total Kas Seluruh Kelas" 
+              value={formatCurrency(stats.balance)} 
+              icon={Wallet} 
+              trend={stats.income >= stats.expense ? "Surplus" : "Defisit"} 
+              isPositive={stats.income >= stats.expense} 
+              variant="accent"
+            />
+          )}
           <div className="grid grid-cols-2 gap-4 h-full">
             <StatCard 
               title="Total Tabungan Siswa" 
@@ -342,10 +371,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Chart Card */}
-        <Card title="Pertumbuhan Kas Kelas" subtitle="Mutasi 5 Bulan Terakhir" className="col-span-12 lg:col-span-8">
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+        {/* Chart Card or Staff List */}
+        {(isAdmin || isTreasurer) && staffList.length > 0 ? (
+          <Card title="Amanah Dana di TU" subtitle="Saldo fisik yang sedang dipegang Staff" className="col-span-12 lg:col-span-8 overflow-hidden">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {staffList.map(s => (
+                  <div key={s.id} className="p-5 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:bg-white hover:shadow-xl transition-all group">
+                     <div>
+                        <div className="flex justify-between items-center mb-4">
+                           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold">
+                              {s.displayName?.charAt(0)}
+                           </div>
+                           <span className="text-[8px] font-black uppercase tracking-widest bg-indigo-600 text-white px-2 py-1 rounded-full">
+                             Kelas {s.assignedGrade || '?'}
+                           </span>
+                        </div>
+                        <p className="text-sm font-black text-slate-900 mb-1">{s.displayName}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Saldo Fisik Pegangan</p>
+                     </div>
+                     <p className="text-xl font-black text-indigo-600 mt-4">{formatCurrency(s.cashOnHand || 0)}</p>
+                  </div>
+                ))}
+             </div>
+          </Card>
+        ) : (
+          <Card title="Pertumbuhan Kas Kelas" subtitle="Mutasi 5 Bulan Terakhir" className="col-span-12 lg:col-span-8">
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
@@ -371,6 +423,7 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         </Card>
+        )}
 
         {/* Classes Breakdown */}
         <Card 

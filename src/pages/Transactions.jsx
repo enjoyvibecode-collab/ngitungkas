@@ -24,6 +24,7 @@ import {
   updateDoc, 
   doc,
   writeBatch,
+  increment,
   limit 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -381,6 +382,16 @@ export default function Transactions() {
                    });
 
                    await batch.commit();
+
+                   // Update Staff Physical Cash Balance (Cash on Hand)
+                   if (profile?.role === 'staff' || profile?.role === 'treasurer') {
+                     const staffRef = doc(db, 'users', profile.uid);
+                     await updateDoc(staffRef, {
+                       cashOnHand: increment(type === 'income' ? amount : -amount),
+                       updatedAt: serverTimestamp()
+                     });
+                   }
+
                    if (needsApproval) {
                      alert("Penarikan kas telah diusulkan dan menunggu persetujuan Bendahara.");
                    }
