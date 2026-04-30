@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   PiggyBank
 } from 'lucide-react';
-import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, Timestamp, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { handleFirestoreError, OperationType } from '../lib/errorHandlers';
@@ -199,11 +199,67 @@ export default function Dashboard() {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         orgId: orgId,
+        orgName: orgSnap.data().name,
         role: 'member' // Default role when joining
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       alert("Gagal bergabung: " + err.message);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    if (!isAdmin) return;
+    
+    // First Confirmation
+    const confirm1 = window.confirm(
+      "⚠️ PERINGATAN KERAS: Bapak/Ibu akan menghapus SELURUH data organisasi (Transaksi, Tabungan, dan Anggota).\n\n" +
+      "Tindakan ini tidak dapat dibatalkan. Apakah Bapak/Ibu yakin?"
+    );
+    
+    if (!confirm1) return;
+
+    // Second Confirmation
+    const confirm2 = window.confirm(
+      "KONTROL TERAKHIR: Semua riwayat keuangan akan hilang TOTAL.\n\nHapus semua data sekarang?"
+    );
+
+    if (!confirm2) return;
+
+    setUpdatingId('resetting');
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Get all transactions
+      const txSnap = await getDocs(collection(db, 'organizations', profile.orgId, 'transactions'));
+      txSnap.docs.forEach(doc => batch.delete(doc.ref));
+
+      // 2. Get all savings
+      const savingsSnap = await getDocs(collection(db, 'organizations', profile.orgId, 'savings'));
+      savingsSnap.docs.forEach(doc => batch.delete(doc.ref));
+
+      // 3. Get all users EXCEPT admin
+      const usersSnap = await getDocs(query(
+        collection(db, 'users'), 
+        where('orgId', '==', profile.orgId)
+      ));
+      
+      usersSnap.docs.forEach(uDoc => {
+        if (uDoc.id !== user.uid) {
+          // Reset their profile or remove? 
+          // For debugging, it's better to remove them so we can test registration from scratch
+          batch.delete(uDoc.ref);
+        }
+      });
+
+      await batch.commit();
+      alert("✅ Berhasil! Database telah dikosongkan. Silahkan refresh halaman.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Reset failed:", err);
+      alert("Gagal meriset data: " + err.message);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -310,6 +366,17 @@ export default function Dashboard() {
             Link Cek Siswa
           </Button>
           <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-bold uppercase">PRO Edition</span>
+          {isAdmin && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleResetDatabase}
+              disabled={!!updatingId}
+              className="bg-rose-50 border-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              {updatingId === 'resetting' ? 'Mereset...' : 'Reset Database'}
+            </Button>
+          )}
         </div>
       </header>
 
